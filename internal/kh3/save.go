@@ -30,13 +30,22 @@ const (
 // and the only abilities any difficulty grants.
 var CriticalAbilities = [3]int{0x068, 0x069, 0x06A}
 
-// CharNames indexes the 16 playable-character structs at 0x1880.
-var CharNames = [16]string{
-	"Sora", "Donald", "Goofy", "Hercules", "Woody", "Buzz", "Rapunzel",
-	"Flynn", "Sulley", "Mike", "Marshmallow", "Baymax", "Jack", "Riku",
-	"Mickey", "Unused",
-}
+// CharCount is how many playable-character structs the save reserves.
+const CharCount = 16
 
+// CharNames indexes the 16 playable-character structs at 0x1880, in save
+// order. Built from the generated table so the two cannot drift.
+var CharNames = func() []string {
+	out := make([]string, CharCount)
+	for i := range out {
+		out[i] = PlayableCharacters[i]
+	}
+	return out
+}()
+
+// Difficulties stays hand-written. Upstream's DifficultyType calls level 1
+// "Normal"; the game calls it "Standard", and that is the word the CLI takes
+// as an argument.
 var Difficulties = map[byte]string{0: "Beginner", 1: "Standard", 2: "Proud", 3: "Critical"}
 
 func charOffset(i int) int { return CharBase + i*CharSize }

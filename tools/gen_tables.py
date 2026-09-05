@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
-"""Regenerate the ability, item and accessory tables.
+"""Regenerate the name tables in internal/kh3/tables.go.
 
-The tables in internal/kh3/tables.go are derived from the enums in
-Xeeynamo/KingdomSaveEditor (GPL-3.0), which is why this project is GPL-3.0.
+The tables are derived from the enums in Xeeynamo/KingdomSaveEditor (GPL-3.0),
+which is why this project is GPL-3.0.
 
 Run with --check in CI to fail if a committed table no longer matches its
 source; run with no flags to regenerate.
 
 The upstream enums carry explicit `= N` anchors that re-base the counter, so a
 naive positional parse drifts by several indices. That bug put Soldier's
-Earring at 187 instead of 256. The parser below honors them.
+Earring at 187 instead of 256. The scanner below honors them, and also honors
+the three shapes a naive regex gets wrong:
+
+  hex anchors      CommandType and WorldType write `= 0x1d`, not `= 29`
+  stacked tags     `[Unused] [Info("")] Usage1d,`
+  multi-arg tags   `[World("bt", "Scala Ad Caelum")]` is a code plus a name
+  no final comma   PlayableCharacterType ends `Unused` with no separator
 """
 
 import argparse
@@ -25,10 +31,25 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REFS = os.path.join(ROOT, "refs", "KingdomSaveEditor")
 TYPES = os.path.join(REFS, "KHSave.Lib3", "Types")
 
-ENTRY = re.compile(
-    r'(?:\[(\w+)\("([^"]*)"\)\]\s*|\[(\w+)\]\s*)?'
-    r'([A-Za-z_][A-Za-z0-9_]*)\s*(?:=\s*(\d+))?\s*,'
-)
+# One enum member: any number of attributes, an identifier, an optional
+# `= value` anchor, and a separator that may be the closing brace.
+ATTR = re.compile(r'\s*\[\s*(\w+)\s*(?:\(\s*(.*?)\s*\))?\s*\]')
+IDENT = re.compile(r'\s*([A-Za-z_]\w*)')
+ANCHOR = re.compile(r'\s*=\s*(0[xX][0-9a-fA-F]+|\d+)')
+COMMA = re.compile(r'\s*,')
+STRING = re.compile(r'"((?:[^"\\]|\\.)*)"')
+COMMENT = re.compile(r'//[^\n]*|/\*.*?\*/', re.S)
+
+
+class Entry:
+    """One decoded enum member."""
+
+    def __init__(self, ident, category, label, extra, unused):
+        self.ident = ident
+        self.category = category
+        self.label = label
+        self.extra = extra
+        self.unused = unused
 
 
 def ensure_upstream():
@@ -40,116 +61,216 @@ def ensure_upstream():
     subprocess.run(["git", "-C", REFS, "checkout", "--quiet", PINNED], check=True)
 
 
+def enum_body(src, enum_name):
+    """The text between the braces of `enum enum_name`."""
+    m = re.search(r'\benum\s+' + re.escape(enum_name) + r'\b', src)
+    if not m:
+        raise SystemExit(f"enum {enum_name} not found")
+    open_brace = src.index("{", m.end())
+    depth, i = 0, open_brace
+    while i < len(src):
+        if src[i] == "{":
+            depth += 1
+        elif src[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return src[open_brace + 1:i]
+        i += 1
+    raise SystemExit(f"enum {enum_name} is not closed")
+
+
 def parse_enum(filename, enum_name):
-    """Return {index: (category, label)}, honouring `= N` anchors."""
-    src = open(os.path.join(TYPES, filename), encoding="utf-8").read()
-    body = src[src.index(f"enum {enum_name}"):]
-    body = body[body.index("{") + 1:]
-    out, idx = {}, 0
-    for m in ENTRY.finditer(body):
-        cat1, label, cat2, ident, val = m.groups()
-        if val is not None:
-            idx = int(val)
-        out[idx] = (cat1 or cat2 or "", label or ident)
+    """Return {index: Entry}, honoring `= N` anchors.
+
+    The scan is sequential rather than a global regex search, so a pattern can
+    never re-synchronize inside an attribute's string argument and invent a
+    member out of the words in a display name.
+    """
+    with open(os.path.join(TYPES, filename), encoding="utf-8") as fh:
+        src = fh.read()
+    body = COMMENT.sub(" ", enum_body(src, enum_name))
+
+    out, idx, pos = {}, 0, 0
+    while True:
+        attrs = []
+        while True:
+            m = ATTR.match(body, pos)
+            if not m:
+                break
+            attrs.append((m.group(1), STRING.findall(m.group(2) or "")))
+            pos = m.end()
+
+        m = IDENT.match(body, pos)
+        if not m:
+            break
+        ident = m.group(1)
+        pos = m.end()
+
+        m = ANCHOR.match(body, pos)
+        if m:
+            idx = int(m.group(1), 0)
+            pos = m.end()
+
+        # An attribute that carries strings names the member; the last string
+        # is the display name, because [World] puts its short code first.
+        named = next((a for a in attrs if a[1]), None)
+        category = next((a[0] for a in attrs if a[0] != "Unused"), "Unused" if attrs else "")
+        out[idx] = Entry(
+            ident=ident,
+            category=category,
+            label=(named[1][-1] if named and named[1][-1] else ident),
+            extra=(named[1][0] if named and len(named[1]) > 1 else ""),
+            unused=any(a[0] == "Unused" for a in attrs),
+        )
         idx += 1
+
+        m = COMMA.match(body, pos)
+        if not m:
+            break
+        pos = m.end()
     return out
-
-
-def q_py(s):
-    return repr(s)
 
 
 def q_go(s):
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-HEADER = """# kh3-save-editor: offline save tools for Kingdom Hearts III (PC)
-# Copyright (C) 2026  thirteenth-order and kh3-save-editor contributors
+def hex3(k):
+    return f"0x{k:03X}"
+
+
+# Every table rendered into tables.go, in the order they appear there.
 #
-# This program is free software: you can redistribute it and/or modify it
-# under the terms of the GNU General Public License as published by the Free
-# Software Foundation, either version 3 of the License, or (at your option)
-# any later version. See the LICENSE file for the full text.
-#
-# Portions of the ability and inventory tables in kh3save/abilities.py and
-# kh3save/items.py are generated from Xeeynamo/KingdomSaveEditor (GPL-3.0).
+#   var        the Go identifier
+#   file/enum  the upstream source
+#   key        how the index is written (decimal, or 0x000 for ability ids)
+#   field      which decoded part of the member the table maps to
+#   comment    what the index space is, because KH3 has several
+# DifficultyType is deliberately absent: upstream calls level 1 "Normal" and
+# the game calls it "Standard", and the CLI takes that word as an argument.
+# kh3.Difficulties stays hand-written in save.go for that reason.
+TABLES = [
+    ("Abilities", "AbilityType.cs", "AbilityType", hex3, "label",
+     "// Abilities maps an ability id to its display name. The id is the index\n"
+     "// into the 512-entry ability array at character + 0x160."),
+    ("AbilityCategory", "AbilityType.cs", "AbilityType", hex3, "category",
+     "// AbilityCategory is Action / Support / Mobility / Info."),
+    ("Items", "InventoryType.cs", "InventoryType", str, "label",
+     "// Items maps an inventory index (the 0x8F4 array) to its name."),
+    ("ItemCategory", "InventoryType.cs", "InventoryType", str, "category",
+     "// ItemCategory is Consumable / Accessory / Synthesis / ..."),
+    ("Accessories", "AccessoryType.cs", "AccessoryType", str, "label",
+     "// Accessories maps an AccessoryType id, the number stored in the\n"
+     "// equipped-accessory slots at character + 0xD8, a different index space\n"
+     "// from Items."),
+    ("Weapons", "WeaponType.cs", "WeaponType", str, "label",
+     "// Weapons maps a WeaponType id, stored in the weapon slots at\n"
+     "// character + 0x80. Keyblades, staves and shields share the space."),
+    ("WeaponCategory", "WeaponType.cs", "WeaponType", str, "category",
+     "// WeaponCategory is Keyblade / Staff / Shield, which is how a slot can be\n"
+     "// offered only the weapons its character can actually hold."),
+    ("Armors", "ArmorType.cs", "ArmorType", str, "label",
+     "// Armors maps an ArmorType id, stored in the armor slots at\n"
+     "// character + 0x98."),
+    ("Consumables", "ConsumableType.cs", "ConsumableType", str, "label",
+     "// Consumables maps a ConsumableType id, stored in the item slots at\n"
+     "// character + 0x118."),
+    ("Tents", "TentType.cs", "TentType", str, "label",
+     "// Tents maps a TentType id. Item slots hold these under item type 2."),
+    ("Materials", "MaterialType.cs", "MaterialType", str, "label",
+     "// Materials maps a synthesis material to its slot in the 100-entry\n"
+     "// u16 count array at 0x165E. Its own index space, not an inventory id."),
+    ("Synthesis", "SyntesisType.cs", "SynthesisType", str, "label",
+     "// Synthesis maps a SynthesisType id, the item-slot index space for\n"
+     "// item type 7."),
+    ("KeyItems", "KeyItemType.cs", "KeyItemType", str, "label",
+     "// KeyItems maps a KeyItemType id, the item-slot index space for\n"
+     "// item type 9."),
+    ("Snacks", "SnackType.cs", "SnackType", str, "label",
+     "// Snacks maps a SnackType id, the item-slot index space for item type 6."),
+    ("Foods", "FoodType.cs", "FoodType", str, "label",
+     "// Foods maps a FoodType id, the item-slot index space for item type 8."),
+    ("MogItems", "MogType.cs", "MogType", str, "label",
+     "// MogItems maps a MogType id, the item-slot index space for item type 10."),
+    ("ItemTypes", "ItemType.cs", "ItemType", str, "label",
+     "// ItemTypes names the discriminator byte in an equipment slot, which\n"
+     "// selects the index space its id is read against."),
+    ("Commands", "CommandType.cs", "CommandType", str, "label",
+     "// Commands maps a CommandType id, stored in the shortcut, magic and link\n"
+     "// arrays at 0xBF20, 0xBF50 and 0xBF68."),
+    ("CommandCategory", "CommandType.cs", "CommandType", str, "category",
+     "// CommandCategory is Command / Magic / Link / Info, which is what makes a\n"
+     "// magic slot refuse a link and the other way round."),
+    ("Locations", "LocationType.cs", "LocationType", str, "label",
+     "// Locations names the save point at 0x54."),
+    ("Worlds", "WorldType.cs", "WorldType", str, "label",
+     "// Worlds names the world logo at 0x18."),
+    ("WorldCodes", "WorldType.cs", "WorldType", str, "extra",
+     "// WorldCodes gives the two-letter code a world uses in map paths, so the\n"
+     "// map path at 0xBBA0 can be checked against the logo at 0x18."),
+    ("CharacterIcons", "CharacterIconType.cs", "CharacterIconType", str, "label",
+     "// CharacterIcons names the save-file icon at 0x60 and its DLC twin at 0x68."),
+    ("PlayableCharacters", "PlayableCharacterType.cs", "PlayableCharacterType", str, "label",
+     "// PlayableCharacters names the 16 character structs at 0x1880. This is the\n"
+     "// slot order in the save, which is not the party id space below."),
+    ("PartyCharacters", "PartyCharacter.cs", "PartyCharacter", str, "label",
+     "// PartyCharacters names the ids in the five-byte party array at 0x32. A\n"
+     "// different index space from PlayableCharacters: Sora is not in it."),
+    ("DesireChoices", "ChoiceType.cs", "DesireChoice", str, "label",
+     "// DesireChoices names the opening-choice byte at 0x30."),
+    ("PowerChoices", "ChoiceType.cs", "PowerChoice", str, "label",
+     "// PowerChoices names the opening-choice byte at 0x31."),
+    ("AiCombatStyles", "AiCombatStyleType.cs", "AiCombatStyleType", str, "label",
+     "// AiCombatStyles names the party-member AI byte at character + 0x158."),
+    ("AiAbilityUse", "AiAbilityType.cs", "AiAbilityType", str, "label",
+     "// AiAbilityUse names the party-member AI byte at character + 0x159."),
+    ("AiRecoveryUse", "AiRecoveryType.cs", "AiRecoveryType", str, "label",
+     "// AiRecoveryUse names the party-member AI byte at character + 0x15A."),
+    ("RecordAttractions", "RecordAttractionType.cs", "RecordAttractionType", str, "label",
+     "// RecordAttractions names the five attraction use counters at 0x696."),
+    ("RecordShotlocks", "RecordShotlockType.cs", "RecordShotlockType", str, "label",
+     "// RecordShotlocks names the thirty shotlock use counters at 0x6D0."),
+    ("StoryFlags", "StoryFlagType.cs", "StoryFlagType", str, "label",
+     "// StoryFlags names the 80-entry progress array at 0xB4C4. Each entry is a\n"
+     "// story-label number, not a boolean: it counts how far that world got."),
+]
 
-"""
 
-
-def render_abilities(ab):
-    L = [HEADER, '"""Ability id -> (category, name) for KH3.\n',
-         "Generated by tools/gen_tables.py from KHSave.Lib3/Types/AbilityType.cs",
-         "(Xeeynamo/KingdomSaveEditor). The id is the index into the 512-entry",
-         'ability array at character + 0x160.\n"""\n', "ABILITIES = {"]
-    for i in sorted(ab):
-        L.append(f"    0x{i:03X}: ({q_py(ab[i][0])}, {q_py(ab[i][1])}),")
-    L.append("}")
-    return "\n".join(L) + "\n"
-
-
-def render_items(items, acc, mapping):
-    L = [HEADER, '"""Inventory index -> (category, name) for KH3.\n',
-         "Generated by tools/gen_tables.py from KHSave.Lib3/Types/InventoryType.cs",
-         "and AccessoryType.cs (Xeeynamo/KingdomSaveEditor).\n",
-         "The inventory enum carries explicit `= N` anchors that re-base the",
-         "counter, so a naive positional parse drifts; this honors them. Verified",
-         "against a real save: the decoded bag reads as Potions, Ethers, AP Boosts,",
-         'synthesis shards, food and Gummi blocks.\n"""\n', "ITEMS = {"]
-    for i in sorted(items):
-        L.append(f"    {i}: ({q_py(items[i][0])}, {q_py(items[i][1])}),")
-    L.append("}\n")
-    L.append("# Accessory id -> name. A different index space from ITEMS: the equipped")
-    L.append("# accessory slots at character + 0xD8 store an AccessoryType id.")
-    L.append("ACCESSORIES = {")
-    for i in sorted(acc):
-        L.append(f"    {i}: {q_py(acc[i][1])},")
-    L.append("}\n")
-    L.append("# Bridges the two index spaces by name, so we can ask whether an")
-    L.append("# inventory item is currently equipped.")
-    L.append("ITEM_TO_ACCESSORY = {")
-    for i in sorted(mapping):
-        L.append(f"    {i}: {mapping[i]},")
-    L.append("}")
-    return "\n".join(L) + "\n"
-
-
-def render_go(ab, items, acc, mapping):
+def render_go(parsed):
     L = ["package kh3", "",
          "// Code generated by tools/gen_tables.py. DO NOT EDIT.",
          "//",
-         "// Derived from KHSave.Lib3 (Xeeynamo/KingdomSaveEditor, GPL-3.0), the same",
-         "// parse that produces the Python tables, so the two cannot drift.", ""]
+         "// Derived from KHSave.Lib3 (Xeeynamo/KingdomSaveEditor, GPL-3.0).",
+         "//",
+         "// KH3 does not have one item id space, it has about ten. An equipment slot",
+         "// stores an id plus a type byte, and the type selects which of these tables",
+         "// the id means something in. Mixing them up is how an editor hands someone a",
+         "// keyblade that reads as a snack.", ""]
 
-    def emit(name, comment, pairs, keyfmt):
+    for name, filename, enum, keyfmt, field, comment in TABLES:
+        entries = parsed[(filename, enum)]
         L.append(comment)
         L.append(f"var {name} = map[int]string{{")
-        for k, v in pairs:
+        for k in sorted(entries):
+            v = getattr(entries[k], field)
+            if field == "extra" and not v:
+                continue
             L.append(f"\t{keyfmt(k)}: {q_go(v)},")
         L.append("}")
         L.append("")
 
-    emit("Abilities",
-         "// Abilities maps an ability id to its display name. The id is the index\n"
-         "// into the 512-entry ability array at character + 0x160.",
-         [(i, ab[i][1]) for i in sorted(ab)], lambda k: f"0x{k:03X}")
-    emit("AbilityCategory", "// AbilityCategory is Action / Support / Mobility / Info.",
-         [(i, ab[i][0]) for i in sorted(ab)], lambda k: f"0x{k:03X}")
-    emit("Items", "// Items maps an inventory index (the 0x8F4 array) to its name.",
-         [(i, items[i][1]) for i in sorted(items)], str)
-    emit("ItemCategory", "// ItemCategory is Consumable / Accessory / Synthesis / ...",
-         [(i, items[i][0]) for i in sorted(items)], str)
-    emit("Accessories",
-         "// Accessories maps an AccessoryType id, the number stored in the\n"
-         "// equipped-accessory slots at character + 0xD8, a different index space\n"
-         "// from Items.",
-         [(i, acc[i][1]) for i in sorted(acc)], str)
-
+    items = parsed[("InventoryType.cs", "InventoryType")]
+    acc = parsed[("AccessoryType.cs", "AccessoryType")]
+    by_name = {}
+    for aid in sorted(acc):
+        by_name.setdefault(acc[aid].label, aid)
     L.append("// ItemToAccessory bridges the two index spaces by name, so we can ask")
     L.append("// whether an inventory item is currently equipped.")
     L.append("var ItemToAccessory = map[int]int{")
-    for i in sorted(mapping):
-        L.append(f"\t{i}: {mapping[i]},")
+    for iid in sorted(items):
+        e = items[iid]
+        if e.category == "Accessory" and e.label in by_name:
+            L.append(f"\t{iid}: {by_name[e.label]},")
     L.append("}")
     return "\n".join(L) + "\n"
 
@@ -167,18 +288,13 @@ def gofmt(src):
 
 def build():
     ensure_upstream()
-    ab = parse_enum("AbilityType.cs", "AbilityType")
-    items = parse_enum("InventoryType.cs", "InventoryType")
-    acc = parse_enum("AccessoryType.cs", "AccessoryType")
-
-    by_name = {}
-    for aid, (_, name) in acc.items():
-        by_name.setdefault(name, aid)
-    mapping = {iid: by_name[name] for iid, (cat, name) in items.items()
-               if cat == "Accessory" and name in by_name}
-
+    parsed = {}
+    for _, filename, enum, _, _, _ in TABLES:
+        key = (filename, enum)
+        if key not in parsed:
+            parsed[key] = parse_enum(filename, enum)
     return {
-        os.path.join(ROOT, "internal", "kh3", "tables.go"): gofmt(render_go(ab, items, acc, mapping)),
+        os.path.join(ROOT, "internal", "kh3", "tables.go"): gofmt(render_go(parsed)),
     }
 
 
