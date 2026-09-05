@@ -33,6 +33,7 @@ const usage = `kh3save: offline save tools for Kingdom Hearts III (PC)
   kh3save patch     <save>... <doc.json>   apply a JSON document
   kh3save diff      <a> <b>                byte diff of two saves
   kh3save rekey     <save>... -to <id>     move a save between accounts
+  kh3save convert   <save>... -to <form>   pc <-> plain (console) container
 
 Anywhere a <save> or <dir> is accepted, a .zip backup of a KINGDOM HEARTS III
 folder works too, and so does one save inside it:
@@ -40,6 +41,10 @@ folder works too, and so does one save inside it:
 
 The UI listens on 127.0.0.1 with a fresh random port and a fresh token every
 run. -addr (or $KH3_ADDR) overrides that and is meant for containers only.
+
+A save with no Steam wrapper -- what a console save tool hands back, and what
+decrypt writes -- is read and written by every command above with no account
+id at all. convert moves a save between the two forms.
 
 The account id is auto-detected from the save path. Override with -account
 or $KH3_ACCOUNT. In-place edits are backed up to <file>.bak.<timestamp>;
@@ -87,6 +92,8 @@ func main() {
 		err = cmdDiff(rest)
 	case "rekey":
 		err = cmdRekey(rest)
+	case "convert":
+		err = cmdConvert(rest)
 	case "gui":
 		f := flag.NewFlagSet("gui", flag.ExitOnError)
 		noBrowser := f.Bool("no-browser", false, "print the URL instead of opening a browser")
@@ -168,6 +175,7 @@ type loaded struct {
 	account string
 	key     []byte
 	plain   []byte
+	format  kh3.Format
 }
 
 func load(path, account string) (*loaded, error) {
@@ -175,24 +183,34 @@ func load(path, account string) (*loaded, error) {
 	if err != nil {
 		return nil, err
 	}
-	acct, key, err := kh3.ResolveAccount(path, blob, account)
-	if err != nil {
-		return nil, err
+	// A save with no Steam wrapper carries no account id and needs no key, so
+	// none of the account plumbing runs for one.
+	format := kh3.DetectFormat(blob)
+	var acct string
+	var key []byte
+	if format.NeedsKey() {
+		if acct, key, err = kh3.ResolveAccount(path, blob, account); err != nil {
+			return nil, err
+		}
+	} else if account != "" {
+		return nil, fmt.Errorf("%s is not encrypted, so -account means nothing here; "+
+			"use `kh3save convert -to pc -account %s` to give it one",
+			kh3.MaskPath(path), account)
 	}
-	plain, err := kh3.Unwrap(blob, key)
+	plain, _, err := kh3.Open(blob, key)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	return &loaded{path, blob, acct, key, plain}, nil
+	return &loaded{path, blob, acct, key, plain, format}, nil
 }
 
-// commit wraps, re-reads its own output as the game would, then writes.
+// commit seals, re-reads its own output as the game would, then writes.
 func commit(l *loaded, newPlain []byte, outDir string, dry bool) error {
-	blob, err := kh3.Wrap(newPlain, l.key)
+	blob, err := kh3.Seal(newPlain, l.format, l.key)
 	if err != nil {
 		return err
 	}
-	check, err := kh3.Unwrap(blob, l.key) // validates CRC and MD5 on the way back
+	check, _, err := kh3.Open(blob, l.key) // revalidates every integrity field
 	if err != nil {
 		return fmt.Errorf("refusing to write %s: %w", l.path, err)
 	}
@@ -532,6 +550,98 @@ func cmdEncrypt(args []string) error {
 			return err
 		}
 		fmt.Printf("%s  ->  %s  (%d bytes)\n", p, dst, len(blob))
+	}
+	return nil
+}
+
+// cmdConvert moves a save between the Steam container and the bare structure.
+//
+// This is the bridge to every non-Steam copy of the game: a console save tool
+// opens its own container and hands back the structure with nothing around it,
+// which is exactly FormatPlain. Going the other way gives that structure a
+// Steam wrapper keyed to whichever account is going to load it.
+func cmdConvert(args []string) error {
+	var account, to, outDir string
+	f := fs("convert", &account)
+	f.StringVar(&to, "to", "", "target form: pc (Steam-encrypted) or plain")
+	f.StringVar(&outDir, "o", "converted", "output directory")
+	rest, err := parseArgs(f, args)
+	if err != nil {
+		return err
+	}
+
+	var want kh3.Format
+	switch strings.ToLower(to) {
+	case "pc", "steam", "encrypted":
+		want = kh3.FormatSteam
+	case "plain", "decrypted", "ps4", "console":
+		want = kh3.FormatPlain
+	case "":
+		return fmt.Errorf("convert needs -to pc or -to plain")
+	default:
+		return fmt.Errorf("unknown target form %q: use pc or plain", to)
+	}
+
+	if want == kh3.FormatSteam && account == "" {
+		account = os.Getenv("KH3_ACCOUNT")
+	}
+	paths, err := expand(rest)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return err
+	}
+
+	for _, p := range paths {
+		blob, err := kh3.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		have := kh3.DetectFormat(blob)
+
+		// Reading needs the source's key; writing needs the destination's.
+		var readKey, writeKey []byte
+		if have.NeedsKey() {
+			if _, readKey, err = kh3.ResolveAccount(p, blob, account); err != nil {
+				return err
+			}
+		}
+		if want.NeedsKey() {
+			if account == "" {
+				return fmt.Errorf("converting to pc needs -account <SteamID64>: " +
+					"the key is derived from it and a plain save carries no id")
+			}
+			if writeKey, err = kh3.DeriveKey(account); err != nil {
+				return err
+			}
+		}
+
+		plain, _, err := kh3.Open(blob, readKey)
+		if err != nil {
+			return fmt.Errorf("%s: %w", p, err)
+		}
+		// A save that never went through AES need not be block aligned, and
+		// encrypting one that is not would drop its last partial block.
+		if want.NeedsKey() {
+			plain = kh3.PadToBlock(plain)
+		}
+
+		out, err := kh3.Seal(plain, want, writeKey)
+		if err != nil {
+			return err
+		}
+		// Same self-check every write path here does: read our own output back
+		// the way the consumer will, and refuse to write if it does not hold.
+		if _, _, err := kh3.Open(out, writeKey); err != nil {
+			return fmt.Errorf("refusing to write %s: %w", p, err)
+		}
+
+		dst := filepath.Join(outDir, kh3.Base(p))
+		if err := os.WriteFile(dst, out, 0o644); err != nil {
+			return err
+		}
+		fmt.Printf("%s  ->  %s  (%s -> %s, %d bytes)\n", p, dst, have, want, len(out))
 	}
 	return nil
 }
