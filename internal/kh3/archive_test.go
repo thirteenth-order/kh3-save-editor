@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -156,8 +157,13 @@ func TestWriteFileRefusesAMemberThatIsNotThere(t *testing.T) {
 	if now, _ := os.Stat(zipPath); now.Size() != stat.Size() {
 		t.Error("the archive was modified by a write that should have failed")
 	}
-	if _, err := zip.OpenReader(zipPath); err != nil {
+	// Close it: Windows will not delete a file that is still open, so a
+	// leaked reader here fails t.TempDir cleanup rather than this assertion.
+	rc, err := zip.OpenReader(zipPath)
+	if err != nil {
 		t.Errorf("the archive is no longer readable: %v", err)
+	} else {
+		rc.Close()
 	}
 }
 
@@ -312,8 +318,13 @@ func TestBackupOfPreservesModeAndNeverOverwrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := fi.Mode().Perm(); got != 0o600 {
-		t.Errorf("backup mode %o, want 0600: a backup of a private save must stay private", got)
+	// Windows has no Unix permission bits: the perm argument only drives the
+	// read-only flag, so a 0600 file reports 0666. The guarantee is real on
+	// Unix, so assert it there and skip the check elsewhere.
+	if runtime.GOOS != "windows" {
+		if got := fi.Mode().Perm(); got != 0o600 {
+			t.Errorf("backup mode %o, want 0600: a backup of a private save must stay private", got)
+		}
 	}
 
 	// Same timestamp: must not clobber the first.
