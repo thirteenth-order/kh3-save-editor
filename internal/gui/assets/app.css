@@ -1,0 +1,518 @@
+/* kh3save UI. One stylesheet, no external requests: the page is served under
+   a CSP of default-src 'none', so every font is a system font and every
+   graphic is either emblem.svg or inline SVG drawn in index.html. */
+
+/* ---------------------------------------------------------------- tokens -- */
+:root {
+  /* Shared with tools/gen_emblem.py, which paints the artwork from the
+     same values, so page and window are one palette and not two. */
+  --ink:#03081a; --ink-2:#061229;
+  --brass:#dfba73; --brass-hi:#f3dcae; --brass-lo:#8a7143;
+  --text:#ece7dc; --dim:#93a6c3; --faint:#63769a;
+
+  /* Translucent surfaces. Everything above the aurora is glass. */
+  --glass:rgba(13,30,58,.55);
+  --glass-hi:rgba(22,45,80,.72);
+  --glass-lo:rgba(8,20,42,.44);
+  --hair:rgba(223,186,115,.15);
+  --hair-hi:rgba(223,186,115,.38);
+  --sheen:rgba(255,255,255,.07);
+
+  --beginner:#5fd0ac; --standard:#6fa8ee; --proud:#e2bc76; --critical:#f0706f;
+  /* Archives are not a difficulty, so they get a hue outside that ramp. */
+  --archive:#a08ad8;
+
+  --pill:999px; --card:20px;
+  --blur:blur(20px) saturate(150%);
+  --ease:cubic-bezier(.4,.14,.3,1);
+  --out:cubic-bezier(.16,1,.3,1);
+  --lift:0 14px 34px -18px rgba(0,0,0,.85);
+
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+* { box-sizing:border-box; }
+
+/* The icon sprite is markup, not a picture: keep it out of the layout. */
+.sprite { position:absolute; width:0; height:0; }
+
+html { scroll-behavior:smooth; }
+
+body {
+  margin:0; padding:0 1.25rem 6rem;
+  background:var(--ink); color:var(--text);
+  font:15px/1.6 var(--sans);
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+
+::selection { background:rgba(223,186,115,.28); }
+
+:focus-visible {
+  outline:2px solid var(--brass);
+  outline-offset:2px;
+  border-radius:var(--pill);
+}
+
+/* ------------------------------------------------------------ backdrop -- */
+/* Three drifting radial washes plus the rose lattice. Fixed, behind
+   everything, and inert to the pointer. */
+.aurora { position:fixed; inset:0; z-index:-2; overflow:hidden; pointer-events:none; }
+.aurora i {
+  position:absolute; display:block; border-radius:50%;
+  filter:blur(70px); opacity:.5;
+  animation:drift 34s var(--ease) infinite alternate;
+}
+.aurora i:nth-child(1) { width:60vw; height:60vw; top:-24vw; left:8vw;
+  background:radial-gradient(circle,#17458c 0%,transparent 68%); }
+.aurora i:nth-child(2) { width:46vw; height:46vw; top:14vw; right:-12vw;
+  background:radial-gradient(circle,#6b4f1d 0%,transparent 68%); opacity:.34;
+  animation-duration:47s; animation-direction:alternate-reverse; }
+.aurora i:nth-child(3) { width:52vw; height:52vw; bottom:-22vw; left:-10vw;
+  background:radial-gradient(circle,#123a63 0%,transparent 70%); opacity:.4;
+  animation-duration:41s; }
+@keyframes drift {
+  from { transform:translate3d(0,0,0) scale(1); }
+  to   { transform:translate3d(4vw,3vw,0) scale(1.16); }
+}
+
+/* The rose window sits behind the masthead, turning once every four minutes. */
+.rose {
+  position:fixed; z-index:-1; pointer-events:none;
+  top:-13rem; left:50%; width:46rem; height:46rem;
+  margin-left:-23rem; opacity:.11;
+  color:var(--brass);
+  animation:turn 240s linear infinite;
+  -webkit-mask-image:radial-gradient(circle,#000 40%,transparent 72%);
+  mask-image:radial-gradient(circle,#000 40%,transparent 72%);
+}
+@keyframes turn { to { transform:rotate(360deg); } }
+
+/* -------------------------------------------------------------- layout -- */
+.wrap { max-width:880px; margin:0 auto; position:relative; }
+
+.masthead { display:flex; align-items:center; gap:1.25rem; padding:3rem 0 1.5rem; }
+.sigil { position:relative; width:74px; height:74px; flex:none; }
+.sigil img { width:100%; height:100%; display:block; border-radius:50%; }
+/* A halo that breathes, so the mark is not a flat sticker. */
+.sigil::after {
+  content:""; position:absolute; inset:-24%; border-radius:50%; z-index:-1;
+  background:radial-gradient(circle,rgba(223,186,115,.4) 0%,transparent 66%);
+  animation:breathe 7s ease-in-out infinite;
+}
+@keyframes breathe { 0%,100% { opacity:.5; transform:scale(1); }
+                     50%     { opacity:.95; transform:scale(1.12); } }
+.sigil .ring {
+  position:absolute; inset:-9%; color:var(--brass);
+  opacity:.55; animation:turn 90s linear infinite;
+}
+
+.wordmark { font-family:var(--serif); font-size:2.1rem; letter-spacing:.04em;
+            line-height:1; margin:0; }
+.wordmark span {
+  background:linear-gradient(96deg,var(--brass) 12%,var(--brass-hi) 46%,var(--brass) 78%);
+  background-size:220% 100%;
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  animation:sweep 9s var(--ease) infinite;
+}
+@keyframes sweep { 0%,100% { background-position:120% 0; } 50% { background-position:-20% 0; } }
+.tagline { color:var(--dim); font-size:.9rem; margin:.45rem 0 0; }
+
+/* The condensed bar that takes over once the masthead scrolls away. */
+.topbar {
+  position:fixed; top:0; left:0; right:0; z-index:40;
+  display:flex; align-items:center; gap:.85rem;
+  padding:.6rem 1.25rem;
+  background:var(--glass-lo); border-bottom:1px solid var(--hair);
+  -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
+  transform:translateY(-110%); opacity:0; visibility:hidden;
+  transition:transform .4s var(--out), opacity .3s linear, visibility .3s linear;
+}
+/* Hidden means hidden: without visibility the Rescan button here stays in the
+   tab order while the bar is parked off-screen. */
+.topbar.on { transform:none; opacity:1; visibility:visible; }
+.topbar img { width:26px; height:26px; border-radius:50%; }
+.topbar b { font:600 .9rem/1 var(--serif); letter-spacing:.05em; }
+.topbar .spacer { flex:1; }
+
+/* ------------------------------------------------------------ headings -- */
+h2 {
+  display:flex; align-items:center; gap:.7rem;
+  font:600 .72rem/1 var(--sans); letter-spacing:.2em; text-transform:uppercase;
+  color:var(--dim); margin:2.5rem 0 1rem;
+}
+h2::after { content:""; flex:1; height:1px;
+  background:linear-gradient(90deg,var(--hair),transparent); }
+h2 svg { width:14px; height:14px; color:var(--brass-lo); }
+
+/* --------------------------------------------------------------- glass -- */
+.glass {
+  background:var(--glass); border:1px solid var(--hair); border-radius:var(--card);
+  -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
+  box-shadow:var(--lift), inset 0 1px 0 var(--sheen);
+}
+
+/* ---------------------------------------------------------------- pills -- */
+/* One pill shape for every control on the page. */
+.pill {
+  display:inline-flex; align-items:center; gap:.5rem;
+  font:600 .82rem/1 var(--sans); letter-spacing:.02em;
+  color:var(--text); background:var(--glass-hi);
+  border:1px solid var(--hair); border-radius:var(--pill);
+  padding:.62rem 1.15rem; cursor:pointer;
+  -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+  transition:transform .2s var(--out), border-color .2s var(--ease),
+             background .2s var(--ease), box-shadow .2s var(--ease), color .2s var(--ease);
+}
+.pill svg { width:15px; height:15px; flex:none; }
+.pill:hover:not(:disabled) {
+  border-color:var(--hair-hi); transform:translateY(-1px);
+  box-shadow:0 8px 22px -14px rgba(0,0,0,.9);
+}
+.pill:active:not(:disabled) { transform:translateY(0) scale(.97); }
+.pill:disabled { opacity:.4; cursor:not-allowed; }
+
+/* The one call to action. A slow highlight crosses it so it reads as live. */
+.pill.go {
+  position:relative; overflow:hidden; color:#14203a; border-color:transparent;
+  background:linear-gradient(135deg,var(--brass-hi),var(--brass) 55%,#c9a55f);
+  box-shadow:0 10px 26px -14px rgba(223,186,115,.9);
+}
+.pill.go::after {
+  content:""; position:absolute; inset:0;
+  background:linear-gradient(105deg,transparent 30%,rgba(255,255,255,.55) 50%,transparent 70%);
+  transform:translateX(-120%);
+  animation:glint 4.5s var(--ease) infinite;
+}
+@keyframes glint { 0%,62% { transform:translateX(-120%); } 100% { transform:translateX(120%); } }
+.pill.go:hover:not(:disabled) { box-shadow:0 14px 30px -12px rgba(223,186,115,1); }
+/* A faded brass fill reads as an ugly enabled button, not a disabled one.
+   Drop back to an outline so "nothing to apply" looks deliberate. */
+.pill.go:disabled {
+  background:none; color:var(--faint); border-color:var(--hair); opacity:1;
+  box-shadow:none;
+}
+.pill.go:disabled::after { display:none; }
+
+.pill.quiet { background:transparent; color:var(--dim); }
+.pill.quiet:hover:not(:disabled) { color:var(--text); background:var(--glass-lo); }
+
+.pill.tiny { padding:.34rem .7rem; font-size:.74rem; }
+.pill.round { padding:.5rem; border-radius:50%; }
+.pill.round svg { width:16px; height:16px; }
+.pill.danger:hover:not(:disabled) { color:var(--critical); border-color:rgba(240,112,111,.5); }
+
+.pill .spin { animation:turn 1s linear infinite; }
+
+/* ---------------------------------------------------------------- chips -- */
+/* Read-only pills: facts, tags, difficulty badges. */
+.chip {
+  display:inline-flex; align-items:center; gap:.42rem;
+  font:500 .74rem/1 var(--sans); color:var(--dim);
+  background:var(--glass-lo); border:1px solid var(--hair);
+  border-radius:var(--pill); padding:.36rem .72rem; white-space:nowrap;
+  max-width:100%;
+}
+/* A filesystem path has no spaces to break at, so the nowrap that keeps short
+   chips tidy would run a backup path straight off the edge of the card. */
+.chip.path { white-space:normal; word-break:break-all; }
+.chip svg { width:12px; height:12px; opacity:.75; }
+.chip.mono { font-family:var(--mono); font-size:.72rem; }
+.chip.hue {
+  color:var(--c); border-color:color-mix(in srgb,var(--c) 40%,transparent);
+  background:color-mix(in srgb,var(--c) 12%,transparent);
+}
+.chip.hue svg { opacity:1; }
+.chip.archive { --c:var(--archive); }
+.facts { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.75rem; }
+
+/* --------------------------------------------------- segmented control -- */
+/* Four equal pills with one thumb that slides between them. The thumb is a
+   single element so the movement is a transform, not four repaints. */
+.seg {
+  position:relative; display:flex; width:100%; max-width:26rem; margin-top:1.05rem;
+  padding:.25rem; border-radius:var(--pill);
+  background:var(--glass-lo); border:1px solid var(--hair);
+  -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+}
+.seg-thumb {
+  position:absolute; top:.25rem; bottom:.25rem; left:.25rem;
+  width:calc((100% - .5rem) / 4); border-radius:var(--pill); z-index:0;
+  background:linear-gradient(145deg,color-mix(in srgb,var(--pick) 92%,#fff),var(--pick));
+  box-shadow:0 6px 18px -10px var(--pick), inset 0 1px 0 rgba(255,255,255,.35);
+  transform:translateX(calc(var(--at) * 100%));
+  transition:transform .38s var(--out), background .28s var(--ease),
+             box-shadow .28s var(--ease);
+}
+.seg button {
+  position:relative; z-index:1; flex:1 1 0; min-width:0;
+  display:flex; align-items:center; justify-content:center; gap:.4rem;
+  font:600 .8rem/1 var(--sans); color:var(--dim);
+  background:none; border:none; border-radius:var(--pill);
+  padding:.55rem .3rem; cursor:pointer;
+  transition:color .22s var(--ease), transform .2s var(--out);
+}
+.seg button svg { width:14px; height:14px; opacity:.6; transition:opacity .22s var(--ease); }
+.seg button:hover { color:var(--text); }
+.seg button:hover svg { opacity:1; }
+.seg button[aria-pressed="true"] { color:#101c33; }
+.seg button[aria-pressed="true"] svg { opacity:.9; }
+/* A hollow ring marks whatever the file is set to right now, so you can
+   always see where you started from. */
+.seg button[data-now="true"]::after {
+  content:""; position:absolute; bottom:.1rem; left:50%; margin-left:-2px;
+  width:4px; height:4px; border-radius:50%; background:currentColor; opacity:.7;
+}
+.seg button[aria-pressed="true"][data-now="true"]::after { opacity:.45; }
+
+/* ------------------------------------------------------------- banners -- */
+.banner {
+  position:relative; overflow:hidden;
+  display:flex; gap:.9rem; align-items:flex-start;
+  padding:1rem 1.15rem; margin:.75rem 0; border-radius:16px;
+  background:var(--glass); border:1px solid var(--hair);
+  -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
+  animation:rise .5s var(--out) both;
+}
+.banner::before {
+  content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
+  background:var(--tone,var(--brass));
+  box-shadow:0 0 22px 2px var(--tone,var(--brass));
+}
+.banner .ico {
+  flex:none; width:30px; height:30px; border-radius:50%;
+  display:grid; place-items:center;
+  color:var(--tone,var(--brass));
+  background:color-mix(in srgb,var(--tone,var(--brass)) 15%,transparent);
+}
+.banner .ico svg { width:16px; height:16px; }
+.banner b { display:block; font-weight:650; font-size:.92rem; margin-bottom:.2rem; }
+.banner p { margin:0; color:var(--dim); font-size:.86rem; }
+.banner.hot { --tone:var(--critical); }
+.banner.warm { --tone:var(--brass); }
+.banner.cool { --tone:var(--standard); }
+.banner.zip { --tone:var(--archive); }
+
+/* ------------------------------------------------------------- folders -- */
+.folder {
+  display:flex; align-items:center; gap:.8rem; flex-wrap:wrap;
+  padding:.7rem .95rem; margin-bottom:.5rem; border-radius:14px;
+  background:var(--glass-lo); border:1px solid var(--hair);
+  transition:border-color .2s var(--ease), background .2s var(--ease);
+  animation:rise .45s var(--out) both;
+}
+.folder:hover { border-color:var(--hair-hi); background:var(--glass); }
+.folder > svg { width:16px; height:16px; color:var(--brass-lo); flex:none; }
+/* Save paths are long and have no spaces to break at. A basis wide enough to
+   be readable means the tag and the buttons wrap under it on a narrow window
+   instead of squeezing the path down to a few characters per line. */
+.folder .p { font-family:var(--mono); font-size:.78rem; word-break:break-all;
+             flex:1 1 15rem; min-width:0; }
+.folder .acts { display:flex; gap:.3rem; opacity:0; transition:opacity .2s var(--ease); }
+.folder:hover .acts, .folder:focus-within .acts { opacity:1; }
+/* Nothing hovers on a touch screen, so the row actions must always show. */
+@media (hover:none) { .folder .acts { opacity:1; } }
+
+.controls { display:flex; gap:.55rem; margin-top:.9rem; flex-wrap:wrap; align-items:center; }
+.field { position:relative; flex:1; min-width:16rem; display:flex; align-items:center; }
+.field svg { position:absolute; left:.95rem; width:15px; height:15px; color:var(--faint);
+             pointer-events:none; }
+input[type=text] {
+  width:100%; font:13px var(--mono); color:var(--text);
+  background:var(--glass-lo); border:1px solid var(--hair);
+  border-radius:var(--pill); padding:.65rem 1rem .65rem 2.5rem;
+  -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+  transition:border-color .2s var(--ease), box-shadow .2s var(--ease);
+}
+input[type=text]::placeholder { color:var(--faint); }
+input[type=text]:focus {
+  outline:none; border-color:var(--hair-hi);
+  box-shadow:0 0 0 4px rgba(223,186,115,.08);
+}
+
+/* --------------------------------------------------------------- slots -- */
+.slot {
+  position:relative; padding:1.35rem 1.5rem; margin-bottom:1rem;
+  border-radius:var(--card);
+  background:var(--glass); border:1px solid var(--hair);
+  -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
+  box-shadow:var(--lift), inset 0 1px 0 var(--sheen);
+  animation:rise .55s var(--out) both;
+  transition:border-color .3s var(--ease), transform .3s var(--out);
+}
+.slot:hover { border-color:var(--hair-hi); transform:translateY(-2px); }
+/* A hairline in the slot's own difficulty color along the top edge. */
+.slot::before {
+  content:""; position:absolute; left:1.5rem; right:1.5rem; top:-1px; height:1px;
+  background:linear-gradient(90deg,transparent,var(--c,var(--brass)),transparent);
+  opacity:.6; transition:opacity .3s var(--ease);
+}
+.slot:hover::before { opacity:1; }
+.slot.done { animation:flash .9s var(--ease); }
+
+.slot-head { display:flex; align-items:center; gap:.9rem; flex-wrap:wrap; }
+.idx {
+  font-family:var(--serif); font-size:1.05rem; line-height:1;
+  color:var(--brass); flex:none;
+  width:2.1rem; height:2.1rem; border-radius:50%;
+  display:grid; place-items:center;
+  background:var(--glass-lo); border:1px solid var(--hair);
+}
+.cur { display:flex; align-items:center; gap:.55rem;
+       font-family:var(--serif); font-size:1.35rem; line-height:1; color:var(--c,var(--text)); }
+.cur svg { width:20px; height:20px; }
+.slot-head .grow { flex:1; }
+
+.act { display:flex; align-items:center; gap:.85rem; margin-top:1rem; flex-wrap:wrap; }
+.hint { color:var(--dim); font-size:.8rem; }
+.hint.err { color:var(--critical); }
+.hint.ok { color:var(--beginner); }
+.arrow { display:inline-flex; align-items:center; gap:.4rem; font-weight:600; }
+.arrow svg { width:13px; height:13px; color:var(--faint); }
+
+.log {
+  font:12px/1.7 var(--mono); color:var(--dim);
+  background:var(--glass-lo); border:1px solid var(--hair);
+  border-left:2px solid var(--brass-lo);
+  border-radius:12px; padding:.75rem 1rem; margin-top:.9rem;
+  overflow-x:auto; white-space:pre-wrap;
+  animation:rise .4s var(--out) both;
+}
+
+/* ------------------------------------------------------------ switches -- */
+/* The start-item switches belong to the save they act on and appear only when
+   they would change something, so the block has to collapse completely. A
+   .opt is display:flex, which would otherwise win over [hidden]. */
+[hidden] { display:none !important; }
+.extras { margin-top:1rem; animation:rise .35s var(--out) both; }
+.extras .opt { margin-bottom:.4rem; }
+.extras .opt:last-child { margin-bottom:0; }
+
+.opt {
+  display:flex; align-items:center; gap:.85rem;
+  padding:.75rem 1rem; margin-bottom:.5rem; border-radius:14px;
+  background:var(--glass-lo); border:1px solid var(--hair);
+  color:var(--dim); font-size:.86rem; cursor:pointer;
+  transition:border-color .2s var(--ease), color .2s var(--ease);
+}
+.opt:hover { border-color:var(--hair-hi); color:var(--text); }
+.opt input { position:absolute; opacity:0; width:0; height:0; }
+.track {
+  flex:none; width:38px; height:22px; border-radius:var(--pill);
+  background:rgba(255,255,255,.07); border:1px solid var(--hair);
+  position:relative; transition:background .25s var(--ease), border-color .25s var(--ease);
+}
+.track::after {
+  content:""; position:absolute; top:2px; left:2px; width:16px; height:16px;
+  border-radius:50%; background:var(--dim);
+  transition:transform .3s var(--out), background .25s var(--ease);
+}
+.opt input:checked + .track { background:rgba(223,186,115,.28); border-color:var(--hair-hi); }
+.opt input:checked + .track::after { transform:translateX(16px); background:var(--brass); }
+.opt input:focus-visible + .track { outline:2px solid var(--brass); outline-offset:2px; }
+
+/* ----------------------------------------------------------- empty/load -- */
+.empty { text-align:center; padding:3rem 1rem 2rem; animation:rise .6s var(--out) both; }
+.empty .art { width:150px; height:150px; margin:0 auto; position:relative; }
+.empty .art img { width:100%; height:100%; opacity:.42; border-radius:50%; }
+.empty .art svg { position:absolute; inset:-14%; color:var(--brass);
+                  opacity:.4; animation:turn 140s linear infinite; }
+.empty h3 { font-family:var(--serif); font-weight:400; font-size:1.5rem; margin:2.3rem 0 .5rem; }
+.empty p { color:var(--dim); max-width:36rem; margin:0 auto 1.5rem; font-size:.9rem; }
+
+.skel { border-radius:var(--card); margin-bottom:1rem; height:132px;
+        background:var(--glass-lo); border:1px solid var(--hair);
+        position:relative; overflow:hidden; }
+.skel::after {
+  content:""; position:absolute; inset:0;
+  background:linear-gradient(100deg,transparent 20%,rgba(255,255,255,.06) 50%,transparent 80%);
+  animation:glide 1.5s linear infinite;
+}
+@keyframes glide { from { transform:translateX(-100%); } to { transform:translateX(100%); } }
+
+/* -------------------------------------------------------------- toasts -- */
+#toasts {
+  position:fixed; right:1.25rem; bottom:1.25rem; z-index:60;
+  display:flex; flex-direction:column; gap:.55rem; align-items:flex-end;
+  pointer-events:none;
+}
+.toast {
+  display:flex; align-items:center; gap:.65rem; max-width:24rem;
+  padding:.7rem 1.1rem; border-radius:var(--pill);
+  font-size:.85rem; color:var(--text);
+  background:var(--glass-hi); border:1px solid var(--hair);
+  -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
+  box-shadow:var(--lift);
+  animation:toastIn .45s var(--out) both;
+  pointer-events:auto;
+}
+.toast svg { width:16px; height:16px; flex:none; color:var(--tone,var(--brass)); }
+.toast.out { animation:toastOut .3s var(--ease) forwards; }
+.toast.bad { --tone:var(--critical); }
+.toast.good { --tone:var(--beginner); }
+@keyframes toastIn  { from { opacity:0; transform:translateY(14px) scale(.94); } }
+@keyframes toastOut { to   { opacity:0; transform:translateX(24px); } }
+
+/* --------------------------------------------------------------- modal -- */
+dialog {
+  padding:0; border:none; background:none; color:var(--text);
+  max-width:min(34rem,calc(100vw - 2.5rem));
+}
+dialog::backdrop {
+  background:rgba(2,6,18,.6);
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+  animation:fade .3s var(--ease) both;
+}
+dialog[open] .sheet { animation:pop .4s var(--out) both; }
+.sheet {
+  padding:1.6rem; border-radius:24px;
+  background:var(--glass-hi); border:1px solid var(--hair);
+  -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
+  box-shadow:0 40px 80px -30px rgba(0,0,0,.95), inset 0 1px 0 var(--sheen);
+}
+/* The change list is aligned by indentation, so wrapping it destroys the
+   shape. Let it scroll sideways, and cap the height so a long list never
+   pushes Cancel and Apply off the bottom of the screen. */
+.sheet .log { white-space:pre; max-height:min(44vh,19rem); overflow:auto; }
+.sheet h3 { font-family:var(--serif); font-weight:400; font-size:1.35rem; margin:0 0 .3rem; }
+.sheet .sub { color:var(--dim); font-size:.86rem; margin:0 0 1.1rem; }
+.sheet .swap { display:flex; align-items:center; gap:.6rem; margin-bottom:1.1rem; flex-wrap:wrap; }
+.sheet .swap .arrow-mark { width:13px; height:13px; color:var(--faint); }
+.sheet .foot { display:flex; gap:.55rem; justify-content:flex-end; margin-top:1.4rem; }
+@keyframes pop  { from { opacity:0; transform:translateY(18px) scale(.95); } }
+@keyframes fade { from { opacity:0; } }
+
+/* -------------------------------------------------------------- footer -- */
+footer {
+  margin-top:3.5rem; padding-top:1.5rem; border-top:1px solid var(--hair);
+  color:var(--faint); font-size:.78rem; line-height:1.9;
+}
+footer code { font-family:var(--mono); color:var(--brass-lo); }
+footer .legal { margin-top:.4rem; opacity:.8; }
+
+/* -------------------------------------------------------------- motion -- */
+@keyframes rise  { from { opacity:0; transform:translateY(12px); } }
+@keyframes flash { 50% { box-shadow:0 0 0 2px var(--c,var(--brass)), var(--lift); } }
+
+/* Staggered entrance: each card follows the one above it. */
+.stagger > * { animation-delay:calc(var(--n,0) * 55ms); }
+
+@media (max-width:640px) {
+  .masthead { padding-top:2rem; gap:.9rem; }
+  .sigil { width:56px; height:56px; }
+  .wordmark { font-size:1.6rem; }
+  .slot { padding:1.15rem 1.1rem; }
+  .seg { max-width:none; }
+  .seg button { font-size:.72rem; padding:.55rem .2rem; }
+  .rose { width:32rem; height:32rem; margin-left:-16rem; }
+  #toasts { left:1.25rem; align-items:stretch; }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  html { scroll-behavior:auto; }
+  *, *::before, *::after {
+    animation-duration:.001ms !important; animation-iteration-count:1 !important;
+    transition-duration:.001ms !important;
+  }
+}

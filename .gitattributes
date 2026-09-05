@@ -1,0 +1,20 @@
+# Normalize to LF in the repo. Windows contributors get CRLF checked out only
+# where it matters, and shell scripts never do, because a CRLF shell script fails
+# with a confusing "bad interpreter" error.
+* text=auto eol=lf
+
+*.go      text eol=lf diff=golang
+*.py      text eol=lf diff=python
+*.sh      text eol=lf
+Makefile  text eol=lf
+*.yml     text eol=lf
+*.md      text eol=lf
+
+*.png     binary
+*.jpg     binary
+*.gif     binary
+*.bin     binary
+*.zip     binary
+
+# Generated: keep it out of diffs and language stats.
+internal/kh3/tables.go  linguist-generated=true

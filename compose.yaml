@@ -1,0 +1,118 @@
+# Hardened run of the kh3save UI.
+#
+#   KH3_SAVES=/path/to/KINGDOM\ HEARTS\ III docker compose up
+#
+# then open the URL the container prints. It carries a token that changes
+# every run, so the address alone is not enough to reach your saves.
+#
+# `make docker-gui` runs this with KH3_UID/KH3_GID already set to yours,
+# which is the part people get wrong.
+
+services:
+  gui:
+    build:
+      context: .
+      args:
+        VERSION: ${KH3_VERSION:-docker}
+    image: kh3save:local
+    command: ["gui", "-no-browser"]
+
+    # Loopback on the host side. Without the 127.0.0.1 prefix Docker publishes
+    # on every interface and, on Linux, writes a NAT rule that your firewall
+    # does not see -- which would put a save editor on the local network.
+    #
+    # Both sides are the same port on purpose. The UI checks the Host header,
+    # port included, so publishing 9000:8787 arrives claiming a port it is not
+    # serving and is refused. KH3_PORT moves both at once.
+    environment:
+      KH3_ADDR: "0.0.0.0:${KH3_PORT:-8787}"
+    ports:
+      - "127.0.0.1:${KH3_PORT:-8787}:${KH3_PORT:-8787}"
+
+    # Your uid, so that saves written back through the mount belong to you.
+    # Defaults to the image's nonroot uid, which can read a save folder but
+    # generally cannot write one.
+    user: "${KH3_UID:-65532}:${KH3_GID:-65532}"
+
+    volumes:
+      # The only path the container can see. Mount the folder holding
+      # KHIII_*.bin, or a backup .zip. Append :ro to look without touching.
+      - "${KH3_SAVES:-./saves}:/saves"
+
+    # The UI's folder list, kept in RAM and dropped when the container stops.
+    tmpfs:
+      - /config:mode=1777,size=1m
+
+    read_only: true          # the image is scratch; nothing needs to write to it
+    cap_drop: [ALL]          # it opens files and a socket, and that needs nothing
+    security_opt:
+      - no-new-privileges:true
+    # A save is a few megabytes and the process is one binary serving one
+    # person, so both of these are far above anything a correct run needs and
+    # low enough that a wrong one stops instead of taking the machine with it.
+    pids_limit: 64
+    mem_limit: 512m
+    # A save editor that comes back by itself after you close it is a surprise.
+    restart: "no"
+
+  # The CLI has no reason to touch a network at all, so it does not get one.
+  # Everything after `run --rm cli` is arguments to kh3save:
+  #
+  #   docker compose run --rm cli info /saves
+  #   docker compose run --rm cli swap /saves -d Critical
+  #
+  # Spelled out rather than extending gui, because what matters here is what
+  # is missing -- the port, the network -- and an inherited service makes
+  # absence hard to read.
+  cli:
+    profiles: [cli]
+    build:
+      context: .
+      args:
+        VERSION: ${KH3_VERSION:-docker}
+    image: kh3save:local
+    command: ["help"]
+    network_mode: none
+    user: "${KH3_UID:-65532}:${KH3_GID:-65532}"
+    volumes:
+      - "${KH3_SAVES:-./saves}:/saves"
+    tmpfs:
+      - /config:mode=1777,size=1m
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 512m
+
+  # The toolchain, for building from source without installing one. Not
+  # hardened, deliberately: it is a workbench, it mounts the repo read-write
+  # and it needs a network to fetch what it compiles against.
+  #
+  #   docker compose --profile dev run --rm dev            # a shell
+  #   docker compose --profile dev run --rm dev make ci    # one command
+  #
+  # `make docker-dev` is the same thing with your uid filled in.
+  dev:
+    profiles: [dev]
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: kh3save-dev:local
+    # Not optional. Everything this writes lands in the mounted repo, so it
+    # has to write as you; the default here is the usual first-user uid.
+    user: "${KH3_UID:-1000}:${KH3_GID:-1000}"
+    working_dir: /src
+    volumes:
+      # The repo itself: edit on the host, build in here, artifacts land in
+      # bin/ and dist/ on the host.
+      - ".:/src"
+      # Go's module and build caches, so a second `make ci` is quick. Held in
+      # a volume rather than the repo, so `make clean` cannot invalidate it
+      # and the host's own caches stay untouched.
+      - "dev-cache:/cache"
+    stdin_open: true
+    tty: true
+
+volumes:
+  dev-cache:

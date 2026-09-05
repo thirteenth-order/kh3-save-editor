@@ -1,0 +1,93 @@
+# ---------------------------------------------------------------------------
+# Build output
+# ---------------------------------------------------------------------------
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+
+# ---------------------------------------------------------------------------
+# Save data. Never commit any of this.
+#
+# A KH3 save embeds the owner's SteamID64 and their entire playthrough. Tests
+# and CI build synthetic saves instead (tools/genfixture), so nothing here
+# is ever needed by the build.
+# ---------------------------------------------------------------------------
+/saves/
+KHIII_*.bin
+*.bak.*
+*.zip
+
+# `kh3save dump -with-account` writes the SteamID64 into its JSON, and a dump
+# is exactly the kind of file that gets left in a working tree. Ignore the
+# extension, then un-ignore the ones that genuinely belong to the repo by name.
+*.json
+!testdata/golden.json
+
+# ---------------------------------------------------------------------------
+# Regenerable working directories
+# ---------------------------------------------------------------------------
+# Upstream KingdomSaveEditor clone. tools/gen_tables.py re-clones it at a
+# pinned commit, so it never needs to be committed.
+# (gitignore has no trailing-comment syntax, so a comment on the pattern line
+# becomes part of the pattern and silently matches nothing.)
+/refs/
+/work/
+/out/
+/extracted/
+
+# ---------------------------------------------------------------------------
+# Python (only tools/gen_tables.py remains, and it is build-time codegen)
+# ---------------------------------------------------------------------------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# ---------------------------------------------------------------------------
+# Assistant / agent scratch
+#
+# Working notes and local agent config. These often carry machine paths,
+# internal hostnames and half-formed reasoning that has no business in a
+# public repo, so they are excluded by default rather than case by case.
+# If a project-level instruction file is ever meant to ship, un-ignore it
+# deliberately with a negation rather than deleting these lines.
+# ---------------------------------------------------------------------------
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+.claudeignore
+AGENTS.md
+.cursor/
+.cursorrules
+.aider*
+.continue/
+.windsurfrules
+.opencode/
+
+# ---------------------------------------------------------------------------
+# Docker
+# ---------------------------------------------------------------------------
+# compose reads this automatically, and the natural thing to put in it is the
+# path to your save folder, which names your account.
+.env
+
+# ---------------------------------------------------------------------------
+# Editors and OS cruft
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+
+# The Python reference implementation was removed once the Go tool reached
+# parity; its output is frozen in testdata/golden.json. Kept ignored so a local
+# copy never lands in a commit.
+/reference/

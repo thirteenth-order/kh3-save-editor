@@ -1,0 +1,113 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'version to build (e.g. v0.1.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    # Never cut a release the golden vectors have not passed. They are the
+    # frozen output of an independent implementation of this format, so a
+    # change that alters any byte of a written save fails here.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with: { go-version: '1.24', cache: false }
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with: { python-version: '3.12' }
+      - run: go test ./... -count=1
+
+  build:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with: { go-version: '1.24', cache: false }
+
+      - name: resolve version
+        id: v
+        run: echo "version=${{ github.event.inputs.version || github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: cross-compile
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          # CGO_ENABLED=0 keeps every binary static and self-contained, which
+          # is the whole point: one file, no runtime to install.
+          for target in \
+            windows/amd64 windows/arm64 \
+            darwin/amd64 darwin/arm64 \
+            linux/amd64 linux/arm64; do
+            os="${target%/*}"; arch="${target#*/}"
+            ext=""; [ "$os" = windows ] && ext=".exe"
+            out="dist/kh3save-${VERSION}-${os}-${arch}${ext}"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build \
+              -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
+              -o "$out" ./cmd/kh3save
+            echo "built $(basename "$out")"
+          done
+
+      - name: checksums
+        working-directory: dist
+        run: |
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: binaries
+          path: dist/
+
+      - name: release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          files: dist/*
+          body: |
+            ## Install
+
+            Download the file for your system, then run it. **No arguments
+            opens the browser UI**. On Windows you can just double-click it.
+
+            | System | File |
+            |---|---|
+            | Windows | `kh3save-${{ steps.v.outputs.version }}-windows-amd64.exe` |
+            | macOS (Apple silicon) | `kh3save-${{ steps.v.outputs.version }}-darwin-arm64` |
+            | macOS (Intel) | `kh3save-${{ steps.v.outputs.version }}-darwin-amd64` |
+            | Linux | `kh3save-${{ steps.v.outputs.version }}-linux-amd64` |
+
+            ### Windows will warn you
+
+            These binaries are not code-signed, so SmartScreen shows
+            "Windows protected your PC". That is expected for an unsigned
+            program from a small project, not a sign of a problem. Choose
+            **More info -> Run anyway**, or verify the SHA-256 against
+            `SHA256SUMS` first. A signing certificate costs a few hundred
+            dollars a year, which this project does not have.
+
+            ### macOS will warn you too
+
+            Right-click the file and choose Open the first time, or run
+            `xattr -d com.apple.quarantine <file>`.
+
+            ### Before you edit a save
+
+            Close Kingdom Hearts III, and turn Steam Cloud off for it in the
+            game's Steam properties. The game rewrites the whole save when it
+            saves, and Cloud can restore its own copy over your edit. Every
+            change writes a timestamped `.bak` next to the file first.
+
+            Verify downloads against `SHA256SUMS`.
+          generate_release_notes: true

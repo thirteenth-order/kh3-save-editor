@@ -1,0 +1,770 @@
+{
+  "_note": "Golden vectors. Each sha256 is of the ENCRYPTED save the tool should write for that case. They were produced by an independent Python implementation of this format, so a Go change that alters any output byte fails the test. See testdata/README.md.",
+  "account": "76561190000000000",
+  "generatedBy": "an independent Python implementation of this save format, written from the same reverse engineering but not from the Go code. It was removed once the Go tool reached parity; these vectors are what the comparison was worth. See testdata/README.md.",
+  "generatedOn": "2026-09-05",
+  "fixture": {
+    "plainLen": 131072,
+    "fileSize": 131048,
+    "slots": {
+      "0": "9f55ebdec9c15a967f6c332ecbc421736b68f7caee5a789adbc66acb06cf5d63",
+      "1": "8a9f5946a47a6ce389214b98d629f56df019610f18bb53e9745c39ad3b9058be",
+      "2": "6beedb210667632357311453b8ebb19cda3742bc3c1aeb2fc6cf3addbe2a1803"
+    }
+  },
+  "cases": [
+    {
+      "op": "identity",
+      "slot": 0,
+      "sha256": "e36102abb1681d4c7f140aa439d84be77433957b12c0a5eaccb75da67a6fd9a7"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 0,
+      "flags": [],
+      "sha256": "5f921a9d95391a8eadb3baf5c2f9333447175bfd01ced2ec7bff9c1c12919de0"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 0,
+      "flags": [
+        "grant-start-items"
+      ],
+      "sha256": "5f921a9d95391a8eadb3baf5c2f9333447175bfd01ced2ec7bff9c1c12919de0"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 0,
+      "flags": [
+        "revoke-start-items"
+      ],
+      "sha256": "5f921a9d95391a8eadb3baf5c2f9333447175bfd01ced2ec7bff9c1c12919de0"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 0,
+      "flags": [
+        "no-scale-hp"
+      ],
+      "sha256": "5f921a9d95391a8eadb3baf5c2f9333447175bfd01ced2ec7bff9c1c12919de0"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 0,
+      "flags": [
+        "scale-bonuses"
+      ],
+      "sha256": "5f921a9d95391a8eadb3baf5c2f9333447175bfd01ced2ec7bff9c1c12919de0"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 0,
+      "flags": [
+        "grant-start-items",
+        "no-scale-hp"
+      ],
+      "sha256": "5f921a9d95391a8eadb3baf5c2f9333447175bfd01ced2ec7bff9c1c12919de0"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 1,
+      "flags": [],
+      "sha256": "e36102abb1681d4c7f140aa439d84be77433957b12c0a5eaccb75da67a6fd9a7"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 1,
+      "flags": [
+        "grant-start-items"
+      ],
+      "sha256": "e36102abb1681d4c7f140aa439d84be77433957b12c0a5eaccb75da67a6fd9a7"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 1,
+      "flags": [
+        "revoke-start-items"
+      ],
+      "sha256": "e36102abb1681d4c7f140aa439d84be77433957b12c0a5eaccb75da67a6fd9a7"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 1,
+      "flags": [
+        "no-scale-hp"
+      ],
+      "sha256": "e36102abb1681d4c7f140aa439d84be77433957b12c0a5eaccb75da67a6fd9a7"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 1,
+      "flags": [
+        "scale-bonuses"
+      ],
+      "sha256": "e36102abb1681d4c7f140aa439d84be77433957b12c0a5eaccb75da67a6fd9a7"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 1,
+      "flags": [
+        "grant-start-items",
+        "no-scale-hp"
+      ],
+      "sha256": "e36102abb1681d4c7f140aa439d84be77433957b12c0a5eaccb75da67a6fd9a7"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 2,
+      "flags": [],
+      "sha256": "626f8828ab0106666641f3996374e2c20d6c1037b882f069c78a825737bad809"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 2,
+      "flags": [
+        "grant-start-items"
+      ],
+      "sha256": "626f8828ab0106666641f3996374e2c20d6c1037b882f069c78a825737bad809"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 2,
+      "flags": [
+        "revoke-start-items"
+      ],
+      "sha256": "626f8828ab0106666641f3996374e2c20d6c1037b882f069c78a825737bad809"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 2,
+      "flags": [
+        "no-scale-hp"
+      ],
+      "sha256": "626f8828ab0106666641f3996374e2c20d6c1037b882f069c78a825737bad809"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 2,
+      "flags": [
+        "scale-bonuses"
+      ],
+      "sha256": "626f8828ab0106666641f3996374e2c20d6c1037b882f069c78a825737bad809"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 2,
+      "flags": [
+        "grant-start-items",
+        "no-scale-hp"
+      ],
+      "sha256": "626f8828ab0106666641f3996374e2c20d6c1037b882f069c78a825737bad809"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 3,
+      "flags": [],
+      "sha256": "898bc7692c0b75d651d85ecfce4f77624b743163dd8aedf87e261e77c655f1b9"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 3,
+      "flags": [
+        "grant-start-items"
+      ],
+      "sha256": "b669b34687e31073270f57225cccb47702d2c570ddf8225f713a6d022b77c41b"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 3,
+      "flags": [
+        "revoke-start-items"
+      ],
+      "sha256": "898bc7692c0b75d651d85ecfce4f77624b743163dd8aedf87e261e77c655f1b9"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 3,
+      "flags": [
+        "no-scale-hp"
+      ],
+      "sha256": "3e71235a1a719b7e1eb1315d149a60218233ff4e2c74e57d44f756d8e0e7cbda"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 3,
+      "flags": [
+        "scale-bonuses"
+      ],
+      "sha256": "898bc7692c0b75d651d85ecfce4f77624b743163dd8aedf87e261e77c655f1b9"
+    },
+    {
+      "op": "swap",
+      "slot": 0,
+      "difficulty": 3,
+      "flags": [
+        "grant-start-items",
+        "no-scale-hp"
+      ],
+      "sha256": "d5873061dec2e5ee18f4a12b1d30998afb256517b616e77fc968a73a7d5cd42e"
+    },
+    {
+      "op": "identity",
+      "slot": 1,
+      "sha256": "41834bad4c891f8ecbfba6ec745c603f37901d1ca9856603699d5be43712b7e4"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 0,
+      "flags": [],
+      "sha256": "0f9b5029357a87ea2d8ef4c57f0e90fdbe69bd57454c0cb00480eb73b0ab099c"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 0,
+      "flags": [
+        "grant-start-items"
+      ],
+      "sha256": "0f9b5029357a87ea2d8ef4c57f0e90fdbe69bd57454c0cb00480eb73b0ab099c"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 0,
+      "flags": [
+        "revoke-start-items"
+      ],
+      "sha256": "0f9b5029357a87ea2d8ef4c57f0e90fdbe69bd57454c0cb00480eb73b0ab099c"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 0,
+      "flags": [
+        "no-scale-hp"
+      ],
+      "sha256": "f0bb19d89b37db670133d66a936c7f81e377edac446154eec596ad6643d07811"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 0,
+      "flags": [
+        "scale-bonuses"
+      ],
+      "sha256": "0f9b5029357a87ea2d8ef4c57f0e90fdbe69bd57454c0cb00480eb73b0ab099c"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 0,
+      "flags": [
+        "grant-start-items",
+        "no-scale-hp"
+      ],
+      "sha256": "f0bb19d89b37db670133d66a936c7f81e377edac446154eec596ad6643d07811"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 1,
+      "flags": [],
+      "sha256": "6615105504f8eb24bb1fd6a16b78679e60adac5b1bf7e63a3a7bff0d998e47c9"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 1,
+      "flags": [
+        "grant-start-items"
+      ],
+      "sha256": "6615105504f8eb24bb1fd6a16b78679e60adac5b1bf7e63a3a7bff0d998e47c9"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 1,
+      "flags": [
+        "revoke-start-items"
+      ],
+      "sha256": "6615105504f8eb24bb1fd6a16b78679e60adac5b1bf7e63a3a7bff0d998e47c9"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 1,
+      "flags": [
+        "no-scale-hp"
+      ],
+      "sha256": "47160330aa59c1de7969f4c9b80218c4cb536547dc7148fbe3fee24e4f0d3e11"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 1,
+      "flags": [
+        "scale-bonuses"
+      ],
+      "sha256": "6615105504f8eb24bb1fd6a16b78679e60adac5b1bf7e63a3a7bff0d998e47c9"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 1,
+      "flags": [
+        "grant-start-items",
+        "no-scale-hp"
+      ],
+      "sha256": "47160330aa59c1de7969f4c9b80218c4cb536547dc7148fbe3fee24e4f0d3e11"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 2,
+      "flags": [],
+      "sha256": "137a549f168845b8674fde3f1db751ebda4230a7ed4f2b8d7ac401f7d5075aa8"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 2,
+      "flags": [
+        "grant-start-items"
+      ],
+      "sha256": "137a549f168845b8674fde3f1db751ebda4230a7ed4f2b8d7ac401f7d5075aa8"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 2,
+      "flags": [
+        "revoke-start-items"
+      ],
+      "sha256": "137a549f168845b8674fde3f1db751ebda4230a7ed4f2b8d7ac401f7d5075aa8"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 2,
+      "flags": [
+        "no-scale-hp"
+      ],
+      "sha256": "11c8da41ae02a740522a547cba2f364165257f0a8dd9efe93453b3fbfb3bd5a6"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 2,
+      "flags": [
+        "scale-bonuses"
+      ],
+      "sha256": "137a549f168845b8674fde3f1db751ebda4230a7ed4f2b8d7ac401f7d5075aa8"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 2,
+      "flags": [
+        "grant-start-items",
+        "no-scale-hp"
+      ],
+      "sha256": "11c8da41ae02a740522a547cba2f364165257f0a8dd9efe93453b3fbfb3bd5a6"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 3,
+      "flags": [],
+      "sha256": "41834bad4c891f8ecbfba6ec745c603f37901d1ca9856603699d5be43712b7e4"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 3,
+      "flags": [
+        "grant-start-items"
+      ],
+      "sha256": "6b65a789974362e016de0ac01186258e0a3456f820394c1442828fdd4427e2c2"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 3,
+      "flags": [
+        "revoke-start-items"
+      ],
+      "sha256": "41834bad4c891f8ecbfba6ec745c603f37901d1ca9856603699d5be43712b7e4"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 3,
+      "flags": [
+        "no-scale-hp"
+      ],
+      "sha256": "41834bad4c891f8ecbfba6ec745c603f37901d1ca9856603699d5be43712b7e4"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 3,
+      "flags": [
+        "scale-bonuses"
+      ],
+      "sha256": "41834bad4c891f8ecbfba6ec745c603f37901d1ca9856603699d5be43712b7e4"
+    },
+    {
+      "op": "swap",
+      "slot": 1,
+      "difficulty": 3,
+      "flags": [
+        "grant-start-items",
+        "no-scale-hp"
+      ],
+      "sha256": "6b65a789974362e016de0ac01186258e0a3456f820394c1442828fdd4427e2c2"
+    },
+    {
+      "op": "identity",
+      "slot": 2,
+      "sha256": "b356c279ac445759f8cde589cbf40bb4643c0087b33b75e8e83fa12654ddc7a3"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 0,
+      "flags": [],
+      "sha256": "b356c279ac445759f8cde589cbf40bb4643c0087b33b75e8e83fa12654ddc7a3"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 0,
+      "flags": [
+        "grant-start-items"
+      ],
+      "sha256": "b356c279ac445759f8cde589cbf40bb4643c0087b33b75e8e83fa12654ddc7a3"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 0,
+      "flags": [
+        "revoke-start-items"
+      ],
+      "sha256": "b356c279ac445759f8cde589cbf40bb4643c0087b33b75e8e83fa12654ddc7a3"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 0,
+      "flags": [
+        "no-scale-hp"
+      ],
+      "sha256": "b356c279ac445759f8cde589cbf40bb4643c0087b33b75e8e83fa12654ddc7a3"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 0,
+      "flags": [
+        "scale-bonuses"
+      ],
+      "sha256": "b356c279ac445759f8cde589cbf40bb4643c0087b33b75e8e83fa12654ddc7a3"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 0,
+      "flags": [
+        "grant-start-items",
+        "no-scale-hp"
+      ],
+      "sha256": "b356c279ac445759f8cde589cbf40bb4643c0087b33b75e8e83fa12654ddc7a3"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 1,
+      "flags": [],
+      "sha256": "fcaf1958b3cea19388d7bb426ca78ea11af39eed2ff0cc02c3d7dacce3c594d0"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 1,
+      "flags": [
+        "grant-start-items"
+      ],
+      "sha256": "fcaf1958b3cea19388d7bb426ca78ea11af39eed2ff0cc02c3d7dacce3c594d0"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 1,
+      "flags": [
+        "revoke-start-items"
+      ],
+      "sha256": "fcaf1958b3cea19388d7bb426ca78ea11af39eed2ff0cc02c3d7dacce3c594d0"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 1,
+      "flags": [
+        "no-scale-hp"
+      ],
+      "sha256": "fcaf1958b3cea19388d7bb426ca78ea11af39eed2ff0cc02c3d7dacce3c594d0"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 1,
+      "flags": [
+        "scale-bonuses"
+      ],
+      "sha256": "fcaf1958b3cea19388d7bb426ca78ea11af39eed2ff0cc02c3d7dacce3c594d0"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 1,
+      "flags": [
+        "grant-start-items",
+        "no-scale-hp"
+      ],
+      "sha256": "fcaf1958b3cea19388d7bb426ca78ea11af39eed2ff0cc02c3d7dacce3c594d0"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 2,
+      "flags": [],
+      "sha256": "4c7a9df8ba0a541f915cbf9e3b0326d6d85f3d90365f3cb75ce2bf8c7151f9c5"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 2,
+      "flags": [
+        "grant-start-items"
+      ],
+      "sha256": "4c7a9df8ba0a541f915cbf9e3b0326d6d85f3d90365f3cb75ce2bf8c7151f9c5"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 2,
+      "flags": [
+        "revoke-start-items"
+      ],
+      "sha256": "4c7a9df8ba0a541f915cbf9e3b0326d6d85f3d90365f3cb75ce2bf8c7151f9c5"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 2,
+      "flags": [
+        "no-scale-hp"
+      ],
+      "sha256": "4c7a9df8ba0a541f915cbf9e3b0326d6d85f3d90365f3cb75ce2bf8c7151f9c5"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 2,
+      "flags": [
+        "scale-bonuses"
+      ],
+      "sha256": "4c7a9df8ba0a541f915cbf9e3b0326d6d85f3d90365f3cb75ce2bf8c7151f9c5"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 2,
+      "flags": [
+        "grant-start-items",
+        "no-scale-hp"
+      ],
+      "sha256": "4c7a9df8ba0a541f915cbf9e3b0326d6d85f3d90365f3cb75ce2bf8c7151f9c5"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 3,
+      "flags": [],
+      "sha256": "2d9a1e1fea5a2f98813e441a5ae60104e6f219be0a804069ce1147a0d9ce058f"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 3,
+      "flags": [
+        "grant-start-items"
+      ],
+      "sha256": "622dc98951528cecf8ec94bd6716f9e7207ae08ac77b9bb4d4ab32bc1574fb23"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 3,
+      "flags": [
+        "revoke-start-items"
+      ],
+      "sha256": "2d9a1e1fea5a2f98813e441a5ae60104e6f219be0a804069ce1147a0d9ce058f"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 3,
+      "flags": [
+        "no-scale-hp"
+      ],
+      "sha256": "db84ea216e48c238f66f22cf45758bea3ce6790b75dfff722fdc36210bd90e1e"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 3,
+      "flags": [
+        "scale-bonuses"
+      ],
+      "sha256": "2d9a1e1fea5a2f98813e441a5ae60104e6f219be0a804069ce1147a0d9ce058f"
+    },
+    {
+      "op": "swap",
+      "slot": 2,
+      "difficulty": 3,
+      "flags": [
+        "grant-start-items",
+        "no-scale-hp"
+      ],
+      "sha256": "fb9d2d57d375340efc4cbe6b1d6d7fd4cdc93cf218d66a093047b42961221814"
+    },
+    {
+      "op": "patch",
+      "slot": 0,
+      "doc": "{\"header\":{\"difficulty\":3,\"munny\":777}}",
+      "docIndex": 0,
+      "sha256": "f5a2f2f74470a1f21a2259cb3fb3c3fb516c678509efcd432816517c5550bbd4"
+    },
+    {
+      "op": "patch",
+      "slot": 0,
+      "doc": "{\"characters\":{\"Sora\":{\"hp\":42,\"abilities\":{\"0x068\":\"0x0000044B\"}}}}",
+      "docIndex": 1,
+      "sha256": "5a140e4ff524b31989ff8c085939b68821dc919b0b90436d20ebf996a3789ffa"
+    },
+    {
+      "op": "patch",
+      "slot": 0,
+      "doc": "{\"inventory\":{\"256\":2,\"1\":9}}",
+      "docIndex": 2,
+      "sha256": "498ad0bfff3088b66d33bc461a0365d4903665abe849b341748385336e846888"
+    },
+    {
+      "op": "patch",
+      "slot": 0,
+      "doc": "{\"header\":{\"level\":50},\"characters\":{\"Goofy\":{\"mp\":5}},\"inventory\":{\"256\":1}}",
+      "docIndex": 3,
+      "sha256": "4cde0ad32fca35e212168f0eaf96a008e61069aa9234b32bdcd915549671819a"
+    },
+    {
+      "op": "patch",
+      "slot": 1,
+      "doc": "{\"header\":{\"difficulty\":3,\"munny\":777}}",
+      "docIndex": 0,
+      "sha256": "1b62f9cba57e181c5feb5ac1ab07052bd8f3a4e77c88aa5a6af787de7f7658fc"
+    },
+    {
+      "op": "patch",
+      "slot": 1,
+      "doc": "{\"characters\":{\"Sora\":{\"hp\":42,\"abilities\":{\"0x068\":\"0x0000044B\"}}}}",
+      "docIndex": 1,
+      "sha256": "090cbe86090da1795cd467ecf380d36179f8cc97eb736af7702a6dc64793b4b7"
+    },
+    {
+      "op": "patch",
+      "slot": 1,
+      "doc": "{\"inventory\":{\"256\":2,\"1\":9}}",
+      "docIndex": 2,
+      "sha256": "b5cafd9e821878e37716eb0e7c425f72ad7f0e4d06d676adca2088bc77f975de"
+    },
+    {
+      "op": "patch",
+      "slot": 1,
+      "doc": "{\"header\":{\"level\":50},\"characters\":{\"Goofy\":{\"mp\":5}},\"inventory\":{\"256\":1}}",
+      "docIndex": 3,
+      "sha256": "f3edc3c24f282581aab4a93def15afad0246955ccb1491e35543b4851ad99a31"
+    },
+    {
+      "op": "patch",
+      "slot": 2,
+      "doc": "{\"header\":{\"difficulty\":3,\"munny\":777}}",
+      "docIndex": 0,
+      "sha256": "a2248d65e55593ebe7d8d7aec62e39f69e9fe48e5528ec8c2d8a1761ab5d8195"
+    },
+    {
+      "op": "patch",
+      "slot": 2,
+      "doc": "{\"characters\":{\"Sora\":{\"hp\":42,\"abilities\":{\"0x068\":\"0x0000044B\"}}}}",
+      "docIndex": 1,
+      "sha256": "92d8972f5ae53e2b6a42e77c53d95e82f584c99d3a288bf570b1afa73bcd426a"
+    },
+    {
+      "op": "patch",
+      "slot": 2,
+      "doc": "{\"inventory\":{\"256\":2,\"1\":9}}",
+      "docIndex": 2,
+      "sha256": "72a9c23948fce2042a47b079e301aa49ee0347024cc01b0226ddea22f841d025"
+    },
+    {
+      "op": "patch",
+      "slot": 2,
+      "doc": "{\"header\":{\"level\":50},\"characters\":{\"Goofy\":{\"mp\":5}},\"inventory\":{\"256\":1}}",
+      "docIndex": 3,
+      "sha256": "77fab4fe211a33d26dc87b5056e6cae999e7119cfa353a95e9c8979b4c405964"
+    },
+    {
+      "op": "rekey",
+      "slot": 0,
+      "toAccount": "76561190000000009",
+      "sha256": "79760f204c62a17f6aaeebdf56b6459a41e9618f4a2ce44deee70f9f02299154"
+    },
+    {
+      "op": "rekey",
+      "slot": 1,
+      "toAccount": "76561190000000009",
+      "sha256": "8394c675cadbc929731e68d7043f51196488c031be2536258da4fc75377fcb14"
+    },
+    {
+      "op": "rekey",
+      "slot": 2,
+      "toAccount": "76561190000000009",
+      "sha256": "f2b84c9c1efb58a6b8e3f169ed2253318a5c583e8a50191bca71b4ce91cae31f"
+    }
+  ]
+}

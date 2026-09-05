@@ -1,0 +1,102 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: go / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.24'
+          cache: false
+
+      - name: gofmt
+        shell: bash
+        run: |
+          unformatted=$(gofmt -l cmd internal)
+          if [ -n "$unformatted" ]; then
+            echo "these files need gofmt:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: vet
+        run: go vet ./...
+
+      - name: test
+        run: go test ./... -count=1
+
+      - name: race
+        if: matrix.os == 'ubuntu-latest'
+        run: go test ./... -race -count=1
+
+
+
+  docker:
+    name: container
+    # The image has failure modes the Go tests cannot reach: a mount that no
+    # longer carries the account id, a read-only root that turns out to be too
+    # little, a published port the UI's own Host check refuses. So CI builds
+    # the real image and drives it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.24'
+          cache: false
+
+      - name: build a synthetic save tree
+        run: go run ./tools/genfixture -layout /tmp/kh3-fixture
+
+      - name: build the image
+        run: docker build --build-arg VERSION=ci -t kh3save:ci .
+
+      - name: drive it end to end
+        env:
+          KH3_FIXTURE: /tmp/kh3-fixture
+        run: tools/docker-smoke.sh kh3save:ci
+
+      # The dev image is the toolchain, not the product, so it gets a sanity
+      # check rather than a second copy of the test matrix: it has to build,
+      # and it has to be able to compile this repo and run the codegen check
+      # that `make ci` ends on.
+      - name: build the dev image
+        run: docker build -f Dockerfile.dev -t kh3save-dev:ci .
+
+      - name: check the dev toolchain
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/src" kh3save-dev:ci \
+            make lint build tables-check
+
+  generated:
+    name: generated files are current
+    # tables.go is generated from KHSave.Lib3; the web UI artwork is generated
+    # by tools/gen_emblem.py. Hand-edit either and the source of truth and the
+    # committed file silently drift apart.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.24'
+          cache: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: regenerate and diff
+        run: |
+          python tools/gen_tables.py --check
+          python tools/gen_emblem.py --check

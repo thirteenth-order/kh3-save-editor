@@ -1,0 +1,65 @@
+# syntax=docker/dockerfile:1
+# check=skip=SecretsUsedInArgOrEnv
+# The check above is skipped because BuildKit flags any ENV whose name contains
+# "KEY" as a possible secret, and GIT_CONFIG_KEY_0 is git's name-of-a-setting,
+# not a credential.
+
+# The toolchain, so you do not have to install one.
+#
+# Building this project from source needs a Go toolchain, a C compiler for the
+# race detector, and a Python 3 for the table codegen check. This image is all
+# three, already set up:
+#
+#   make docker-dev                  a shell where `make ci` works
+#   make docker-dev ARGS="make dist" binaries in dist/, nothing installed
+#
+# It is the opposite of the runtime image in ./Dockerfile. That one is empty
+# on purpose; this one is a workbench, and the hardening flags that make sense
+# for running a save editor make no sense for compiling one.
+#
+# Run it as yourself -- `--user "$(id -u):$(id -g)"` -- or every file it builds
+# into the mounted repo comes back owned by root. The make targets and the dev
+# service in compose.yaml both do this for you.
+
+# Debian rather than Alpine, for one reason: `make ci` runs the race detector,
+# the race detector needs cgo, and cgo needs a C toolchain. The golang Debian
+# images already have one; the Alpine variant does not, and `make ci` fails at
+# test-race with "-race requires cgo".
+ARG GO_VERSION=1.24
+FROM golang:${GO_VERSION}-trixie
+
+# make and git come with the image; python3 does not. The last Python left in
+# the project is tools/gen_tables.py, which `make ci` runs via tables-check --
+# stdlib only, so there is nothing to install alongside it.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 \
+ && rm -rf /var/lib/apt/lists/*
+
+# Caches for whatever uid this ends up running as. A named volume mounted at
+# /cache inherits these permissions when Docker first creates it, which is what
+# keeps the Go build cache warm between runs without knowing the uid in advance.
+ENV GOPATH=/cache/go \
+    GOMODCACHE=/cache/go/pkg/mod \
+    GOCACHE=/cache/go-build \
+    XDG_CACHE_HOME=/cache \
+    HOME=/home/dev
+RUN mkdir -p /cache/go /cache/go-build /home/dev \
+ && chmod -R 777 /cache /home/dev
+
+# git refuses to read a repo owned by another uid, and a bind-mounted repo is
+# exactly that whenever the host uid does not line up. This says "the mount is
+# fine" without writing to a config file the container may not own.
+ENV GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0=safe.directory \
+    GIT_CONFIG_VALUE_0=*
+
+WORKDIR /src
+
+# No sources are copied in: the repo is mounted, so an edit on the host is an
+# edit here, and a build here lands in bin/ and dist/ on the host.
+CMD ["bash"]
+
+LABEL org.opencontainers.image.title="kh3save-dev" \
+      org.opencontainers.image.description="Build toolchain for kh3-save-editor" \
+      org.opencontainers.image.source="https://github.com/thirteenth-order/kh3-save-editor" \
+      org.opencontainers.image.licenses="GPL-3.0-or-later"
