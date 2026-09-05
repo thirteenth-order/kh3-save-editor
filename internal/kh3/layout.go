@@ -47,7 +47,13 @@ const (
 	ShortcutPages   = 3
 	ShortcutButtons = 4
 
-	MagicOff   = 0xBF50 // Commands ids
+	// Magic and link slots hold Commands ids. What a slot *position* means is
+	// not settled: both sample saves are an hour and a half into Olympus and
+	// read Fire in slot 0 and Water in slot 1, which the game's own magic menu
+	// contradicts -- Water is not obtainable there. Slot 0 lands exactly on
+	// Fire, so the offset is right; the ordering is what is unexplained. These
+	// are reported and written as stored rather than relabelled to fit a guess.
+	MagicOff   = 0xBF50
 	MagicCount = 6
 	LinkOff    = 0xBF68
 	LinkCount  = 5

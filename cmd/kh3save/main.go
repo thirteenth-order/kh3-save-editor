@@ -277,6 +277,7 @@ func cmdInfo(args []string) error {
 	// into bug reports, so both are opt-in.
 	withAccount := f.Bool("with-account", false, "show the account id")
 	showKey := f.Bool("show-key", false, "show the derived AES key (identifies your account)")
+	long := f.Bool("l", false, "also show party, equipment, magic, materials and story progress")
 	rest, err := parseArgs(f, args)
 	if err != nil {
 		return err
@@ -292,6 +293,9 @@ func cmdInfo(args []string) error {
 		}
 		h := kh3.ReadHeader(l.plain)
 		fmt.Printf("\n%s\n", p)
+		if l.format == kh3.FormatPlain {
+			fmt.Println("  container    plain (no Steam wrapper, no account id)")
+		}
 		if *withAccount {
 			fmt.Printf("  account      %s\n", l.account)
 		}
@@ -307,13 +311,97 @@ func cmdInfo(args []string) error {
 		fmt.Printf("  difficulty   %d (%s)\n", h.Difficulty, kh3.Difficulties[h.Difficulty])
 		fmt.Printf("  level        %d    playtime %s    munny %d    exp %d\n",
 			h.Level, h.Playtime(), h.Munny, h.TotalExp)
-		fmt.Printf("  location     %d   saves %d   enemies defeated %d\n",
-			h.Location, h.SavesCount, h.EnemiesDefeated)
+		fmt.Printf("  world        %s\n", kh3.WorldName(int(h.WorldLogo)))
+		fmt.Printf("  location     %d (%s)\n", h.Location, kh3.LocationName(int(h.Location)))
+		fmt.Printf("  saves %d   enemies defeated %d   crabs %d\n",
+			h.SavesCount, h.EnemiesDefeated, kh3.GetCrabs(l.plain))
 		fmt.Printf("  bonuses      hp %d mp %d str %d mag %d def %d\n",
 			h.BonusHP, h.BonusMP, h.BonusStrength, h.BonusMagic, h.BonusDefense)
 		fmt.Printf("  map          %s  @ %s\n", h.MapPath, h.MapSpawn)
+		if *long {
+			printLong(l.plain)
+		}
 	}
 	return nil
+}
+
+// printLong renders the regions that are interesting to read but too bulky for
+// the default output. Everything here is also in dump, in a form patch reads.
+func printLong(p []byte) {
+	var party []string
+	for _, id := range kh3.GetParty(p) {
+		if id != 0 {
+			party = append(party, kh3.PartyName(id))
+		}
+	}
+	if len(party) > 0 {
+		fmt.Printf("  party        %s\n", strings.Join(party, ", "))
+	}
+
+	fmt.Printf("  magic        %s\n", commandList(p, kh3.GetMagic, kh3.MagicCount))
+	fmt.Printf("  links        %s\n", commandList(p, kh3.GetLink, kh3.LinkCount))
+
+	for page := 0; page < kh3.ShortcutPages; page++ {
+		var set []string
+		for b, bname := range kh3.ShortcutButtonNames {
+			if cmd := kh3.GetShortcut(p, page, b); cmd != 0 {
+				set = append(set, bname+" "+kh3.CommandName(cmd))
+			}
+		}
+		if len(set) > 0 {
+			fmt.Printf("  shortcuts %d  %s\n", page, strings.Join(set, ", "))
+		}
+	}
+
+	var mats []string
+	for id := 0; id < kh3.MaterialCount; id++ {
+		if n := kh3.GetMaterial(p, id); n > 0 {
+			mats = append(mats, fmt.Sprintf("%s x%d", kh3.MaterialName(id), n))
+		}
+	}
+	if len(mats) > 0 {
+		fmt.Printf("  materials    %s\n", strings.Join(mats, ", "))
+	}
+
+	var flags []string
+	for id := 0; id < kh3.StoryFlagCount; id++ {
+		if v := kh3.GetStoryFlag(p, id); v != 0 {
+			flags = append(flags, fmt.Sprintf("%s %d", kh3.StoryFlagName(id), v))
+		}
+	}
+	if len(flags) > 0 {
+		fmt.Printf("  story        %s\n", strings.Join(flags, ", "))
+	}
+
+	for ci := range kh3.CharNames {
+		var worn []string
+		for _, k := range kh3.EquipKinds {
+			for s := 0; s < k.Slots; s++ {
+				if e := kh3.GetEquip(p, ci, k.Off, s); !e.Empty() {
+					worn = append(worn, e.Name())
+				}
+			}
+		}
+		if len(worn) == 0 {
+			continue
+		}
+		fmt.Printf("  %-12s hp %d mp %d  %s\n", kh3.CharNames[ci],
+			kh3.GetStat(p, ci, kh3.StatHP), kh3.GetStat(p, ci, kh3.StatMP),
+			strings.Join(worn, ", "))
+	}
+}
+
+func commandList(p []byte, get func([]byte, int) int, count int) string {
+	var out []string
+	for i := 0; i < count; i++ {
+		if cmd := get(p, i); cmd != 0 {
+			out = append(out, kh3.CommandName(cmd))
+		}
+	}
+	if len(out) == 0 {
+		return "(none)"
+	}
+	return strings.Join(out, ", ")
 }
 
 func cmdVerify(args []string) error {
