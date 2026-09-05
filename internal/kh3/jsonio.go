@@ -60,8 +60,10 @@ var headerFields = []headerField{
 	{0x39, "u8", "save_clear"},
 	{0x54, "u8", "location"},
 	{0x60, "u8", "save_icon"},
+	{0x68, "u8", "dlc_save_icon"},
 	{0x70, "u32", "enemies_defeated"},
 	{0x5B8, "u16", "saves_count"},
+	{CrabsOff, "i32", "crabs"},
 	{0xB49C, "i32", "bonus_hp"},
 	{0xB4A0, "i32", "bonus_mp"},
 	{0xB4A4, "i32", "bonus_strength"},
@@ -174,7 +176,21 @@ func Dump(plain []byte, account string, characters int) ([]byte, error) {
 		h.set("map_path", hdr.MapPath)
 		h.set("map_spawn", hdr.MapSpawn)
 	}
+	if slot {
+		h.set("world_logo_name", WorldName(int(plain[0x18])))
+		h.set("location_name", LocationName(int(plain[0x54])))
+		h.set("save_icon_name", IconName(int(plain[0x60])))
+	}
 	doc.set("header", h)
+
+	if slot {
+		doc.set("party", dumpParty(plain))
+		doc.set("shortcuts", dumpShortcuts(plain))
+		doc.set("magic", dumpCommandArray(plain, GetMagic, MagicCount))
+		doc.set("links", dumpCommandArray(plain, GetLink, LinkCount))
+		doc.set("story_flags", dumpStoryFlags(plain))
+		doc.set("records", dumpRecords(plain))
+	}
 
 	chars := newOrdered()
 	if slot {
@@ -186,6 +202,9 @@ func Dump(plain []byte, account string, characters int) ([]byte, error) {
 			for _, st := range charStats {
 				e.set(st.name, readField(plain, charOffset(ci)+st.off, st.kind))
 			}
+			e.set("current_weapon", GetCurrentWeapon(plain, ci))
+			e.set("ai", dumpAI(plain, ci))
+			e.set("equipment", dumpEquipment(plain, ci))
 			abil := newOrdered()
 			for aid := 0; aid < AbilityCount; aid++ {
 				w := GetAbility(plain, ci, aid)
@@ -224,7 +243,159 @@ func Dump(plain []byte, account string, characters int) ([]byte, error) {
 	}
 	doc.set("inventory", inv)
 
+	mats := newOrdered()
+	if slot {
+		for id := 0; id < MaterialCount; id++ {
+			n := GetMaterial(plain, id)
+			if n == 0 {
+				continue
+			}
+			e := newOrdered()
+			e.set("count", n)
+			e.set("name", MaterialName(id))
+			mats.set(strconv.Itoa(id), e)
+		}
+	}
+	doc.set("materials", mats)
+
 	return json.MarshalIndent(doc, "", "  ")
+}
+
+// The dump* helpers below render one region each. They all key an array by its
+// decimal index rather than emitting a JSON list, so a patch can name a single
+// slot without restating the ones it is not touching.
+
+func dumpParty(p []byte) *ordered {
+	out := newOrdered()
+	for slot, id := range GetParty(p) {
+		e := newOrdered()
+		e.set("id", id)
+		e.set("name", PartyName(id))
+		out.set(strconv.Itoa(slot), e)
+	}
+	return out
+}
+
+func dumpShortcuts(p []byte) *ordered {
+	out := newOrdered()
+	for page := 0; page < ShortcutPages; page++ {
+		g := newOrdered()
+		for b, name := range ShortcutButtonNames {
+			cmd := GetShortcut(p, page, b)
+			e := newOrdered()
+			e.set("id", cmd)
+			e.set("name", CommandName(cmd))
+			g.set(name, e)
+		}
+		out.set(strconv.Itoa(page), g)
+	}
+	return out
+}
+
+func dumpCommandArray(p []byte, get func([]byte, int) int, count int) *ordered {
+	out := newOrdered()
+	for i := 0; i < count; i++ {
+		cmd := get(p, i)
+		e := newOrdered()
+		e.set("id", cmd)
+		e.set("name", CommandName(cmd))
+		out.set(strconv.Itoa(i), e)
+	}
+	return out
+}
+
+// dumpStoryFlags omits the flags still at zero. Eighty entries of which a
+// handful are set makes a wall of noise out of the interesting half-dozen.
+func dumpStoryFlags(p []byte) *ordered {
+	out := newOrdered()
+	for id := 0; id < StoryFlagCount; id++ {
+		v := GetStoryFlag(p, id)
+		if v == 0 {
+			continue
+		}
+		e := newOrdered()
+		e.set("value", v)
+		e.set("name", StoryFlagName(id))
+		out.set(strconv.Itoa(id), e)
+	}
+	return out
+}
+
+func dumpRecords(p []byte) *ordered {
+	att := newOrdered()
+	for id := 0; id < AttractionUseCount; id++ {
+		e := newOrdered()
+		e.set("uses", GetAttractionUse(p, id))
+		e.set("name", lookup(RecordAttractions, id))
+		att.set(strconv.Itoa(id), e)
+	}
+	shot := newOrdered()
+	for id := 0; id < ShotlockUseCount; id++ {
+		n := GetShotlockUse(p, id)
+		if n == 0 {
+			continue
+		}
+		e := newOrdered()
+		e.set("uses", n)
+		e.set("name", lookup(RecordShotlocks, id))
+		shot.set(strconv.Itoa(id), e)
+	}
+	out := newOrdered()
+	out.set("attractions", att)
+	out.set("shotlocks", shot)
+	return out
+}
+
+func dumpAI(p []byte, ci int) *ordered {
+	a := GetAI(p, ci)
+	out := newOrdered()
+	for _, f := range aiFields {
+		e := newOrdered()
+		v := f.get(a)
+		e.set("id", v)
+		e.set("name", lookup(f.table, v))
+		out.set(f.name, e)
+	}
+	out.set("recovery_targets", a.RecoveryTargets)
+	return out
+}
+
+func dumpEquipment(p []byte, ci int) *ordered {
+	out := newOrdered()
+	for _, k := range EquipKinds {
+		g := newOrdered()
+		for s := 0; s < k.Slots; s++ {
+			eq := GetEquip(p, ci, k.Off, s)
+			if eq.Empty() {
+				continue
+			}
+			e := newOrdered()
+			e.set("id", eq.ID)
+			e.set("type", eq.ItemType)
+			e.set("type_name", lookup(ItemTypes, eq.ItemType))
+			e.set("name", eq.Name())
+			e.set("enabled", eq.Enabled)
+			g.set(strconv.Itoa(s), e)
+		}
+		out.set(k.Name, g)
+	}
+	return out
+}
+
+// aiFields ties each AI byte to the table that names it, so dump and patch
+// cannot disagree about which of the three a key means.
+var aiFields = []struct {
+	name  string
+	table map[int]string
+	get   func(AI) int
+	set   func(*AI, int)
+}{
+	{"combat_style", AiCombatStyles, func(a AI) int { return a.CombatStyle },
+		func(a *AI, v int) { a.CombatStyle = v }},
+	{"ability_use", AiAbilityUse, func(a AI) int { return a.AbilityUse },
+		func(a *AI, v int) { a.AbilityUse = v }},
+	{"recovery_use", AiRecoveryUse, func(a AI) int { return a.RecoveryUse },
+		func(a *AI, v int) { a.RecoveryUse = v }},
 }
 
 func asInt(v any) (int64, error) {
@@ -265,9 +436,6 @@ func Patch(plain, doc []byte) ([]byte, []string, error) {
 
 	if hdr, ok := d["header"].(map[string]any); ok {
 		for _, key := range sortedKeys(hdr) {
-			if ReadonlyHeader[key] {
-				return nil, nil, fmt.Errorf("header.%s is read-only", key)
-			}
 			f, ok := byName[key]
 			if !ok {
 				continue // display-only keys such as playtime / map_path
@@ -275,6 +443,16 @@ func Patch(plain, doc []byte) ([]byte, []string, error) {
 			nv, err := asInt(hdr[key])
 			if err != nil {
 				return nil, nil, fmt.Errorf("header.%s: %w", key, err)
+			}
+			// A read-only field is only an error when the document actually
+			// asks to move it. Rejecting one that still holds its dumped value
+			// would make the obvious workflow -- dump, change one number, patch
+			// the whole document back -- fail on a field nobody touched.
+			if ReadonlyHeader[key] {
+				if readField(out, f.off, f.kind) != nv {
+					return nil, nil, fmt.Errorf("header.%s is read-only", key)
+				}
+				continue
 			}
 			old := readField(out, f.off, f.kind)
 			writeField(out, f.off, f.kind, nv)
@@ -318,6 +496,38 @@ func Patch(plain, doc []byte) ([]byte, []string, error) {
 								cname, aid, AbilityName(aid), old, word))
 						}
 					}
+					continue
+				}
+				switch key {
+				case "current_weapon":
+					nv, err := asInt(entry[key])
+					if err != nil {
+						return nil, nil, fmt.Errorf("characters.%s.current_weapon: %w", cname, err)
+					}
+					if nv < 0 || nv >= WeaponSlots {
+						return nil, nil, fmt.Errorf(
+							"characters.%s.current_weapon: slot %d is outside 0-%d",
+							cname, nv, WeaponSlots-1)
+					}
+					if old := GetCurrentWeapon(out, ci); old != int(nv) {
+						SetCurrentWeapon(out, ci, int(nv))
+						changes = append(changes, fmt.Sprintf(
+							"%s.current_weapon: %d -> %d", cname, old, nv))
+					}
+					continue
+				case "ai":
+					c, err := patchAI(out, ci, cname, entry[key])
+					if err != nil {
+						return nil, nil, err
+					}
+					changes = append(changes, c...)
+					continue
+				case "equipment":
+					c, err := patchEquipment(out, ci, cname, entry[key])
+					if err != nil {
+						return nil, nil, err
+					}
+					changes = append(changes, c...)
 					continue
 				}
 				st, ok := findStat(key)
@@ -378,7 +588,349 @@ func Patch(plain, doc []byte) ([]byte, []string, error) {
 			}
 		}
 	}
+	for _, sec := range patchSections {
+		raw, ok := d[sec.key]
+		if !ok {
+			continue
+		}
+		m, ok := raw.(map[string]any)
+		if !ok {
+			return nil, nil, fmt.Errorf("%s must be an object", sec.key)
+		}
+		c, err := sec.apply(out, m)
+		if err != nil {
+			return nil, nil, err
+		}
+		changes = append(changes, c...)
+	}
 	return out, changes, nil
+}
+
+// scalar is the "id" or "count" style value a dumped entry carries. A patch
+// may write the whole object back unchanged or just the bare number, because
+// editing a dump by hand and deleting the noise around the number is the
+// obvious thing to do and should work.
+func scalar(v any, field string) (int64, error) {
+	if m, ok := v.(map[string]any); ok {
+		inner, ok := m[field]
+		if !ok {
+			return 0, fmt.Errorf("object needs a %q key", field)
+		}
+		return asInt(inner)
+	}
+	return asInt(v)
+}
+
+// indexKeys returns the numeric keys of a section, in order, bounded by count.
+func indexKeys(m map[string]any, count int, what string) ([]int, error) {
+	out := make([]int, 0, len(m))
+	for _, k := range sortedKeys(m) {
+		n, err := strconv.ParseInt(k, 0, 32)
+		if err != nil {
+			return nil, fmt.Errorf("bad %s index %q", what, k)
+		}
+		if n < 0 || n >= int64(count) {
+			return nil, fmt.Errorf("%s index %d is outside 0-%d", what, n, count-1)
+		}
+		out = append(out, int(n))
+	}
+	return out, nil
+}
+
+// patchSections are the whole-document regions, each keyed by index. They run
+// after the header and character sections and in a fixed order, so a document
+// that touches several of them reports its changes the same way every time.
+var patchSections = []struct {
+	key   string
+	apply func(out []byte, m map[string]any) ([]string, error)
+}{
+	{"party", func(out []byte, m map[string]any) ([]string, error) {
+		idx, err := indexKeys(m, PartySlots, "party")
+		if err != nil {
+			return nil, err
+		}
+		var ch []string
+		for _, slot := range idx {
+			v, err := scalar(m[strconv.Itoa(slot)], "id")
+			if err != nil {
+				return nil, fmt.Errorf("party.%d: %w", slot, err)
+			}
+			old := GetParty(out)[slot]
+			SetPartySlot(out, slot, int(v))
+			if old != int(v) {
+				ch = append(ch, fmt.Sprintf("party.%d: %s -> %s",
+					slot, PartyName(old), PartyName(int(v))))
+			}
+		}
+		return ch, nil
+	}},
+	{"shortcuts", func(out []byte, m map[string]any) ([]string, error) {
+		idx, err := indexKeys(m, ShortcutPages, "shortcuts")
+		if err != nil {
+			return nil, err
+		}
+		var ch []string
+		for _, page := range idx {
+			g, ok := m[strconv.Itoa(page)].(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("shortcuts.%d must be an object", page)
+			}
+			for b, bname := range ShortcutButtonNames {
+				raw, ok := g[bname]
+				if !ok {
+					continue
+				}
+				v, err := scalar(raw, "id")
+				if err != nil {
+					return nil, fmt.Errorf("shortcuts.%d.%s: %w", page, bname, err)
+				}
+				old := GetShortcut(out, page, b)
+				SetShortcut(out, page, b, int(v))
+				if old != int(v) {
+					ch = append(ch, fmt.Sprintf("shortcuts.%d.%s: %s -> %s",
+						page, bname, CommandName(old), CommandName(int(v))))
+				}
+			}
+		}
+		return ch, nil
+	}},
+	{"magic", commandArrayPatch("magic", MagicCount, GetMagic, SetMagic)},
+	{"links", commandArrayPatch("links", LinkCount, GetLink, SetLink)},
+	{"story_flags", func(out []byte, m map[string]any) ([]string, error) {
+		idx, err := indexKeys(m, StoryFlagCount, "story_flags")
+		if err != nil {
+			return nil, err
+		}
+		var ch []string
+		for _, id := range idx {
+			v, err := scalar(m[strconv.Itoa(id)], "value")
+			if err != nil {
+				return nil, fmt.Errorf("story_flags.%d: %w", id, err)
+			}
+			old := GetStoryFlag(out, id)
+			SetStoryFlag(out, id, int32(v))
+			if old != int32(v) {
+				ch = append(ch, fmt.Sprintf("story_flags.%d %s: %d -> %d",
+					id, StoryFlagName(id), old, v))
+			}
+		}
+		return ch, nil
+	}},
+	{"materials", func(out []byte, m map[string]any) ([]string, error) {
+		idx, err := indexKeys(m, MaterialCount, "materials")
+		if err != nil {
+			return nil, err
+		}
+		var ch []string
+		for _, id := range idx {
+			v, err := scalar(m[strconv.Itoa(id)], "count")
+			if err != nil {
+				return nil, fmt.Errorf("materials.%d: %w", id, err)
+			}
+			old := GetMaterial(out, id)
+			SetMaterial(out, id, int(v))
+			if now := GetMaterial(out, id); old != now {
+				ch = append(ch, fmt.Sprintf("materials %d %s: x%d -> x%d",
+					id, MaterialName(id), old, now))
+			}
+		}
+		return ch, nil
+	}},
+	{"records", func(out []byte, m map[string]any) ([]string, error) {
+		var ch []string
+		for _, r := range []struct {
+			key   string
+			off   int
+			count int
+			names map[int]string
+		}{
+			{"attractions", AttractionUseOff, AttractionUseCount, RecordAttractions},
+			{"shotlocks", ShotlockUseOff, ShotlockUseCount, RecordShotlocks},
+		} {
+			raw, ok := m[r.key]
+			if !ok {
+				continue
+			}
+			sub, ok := raw.(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("records.%s must be an object", r.key)
+			}
+			idx, err := indexKeys(sub, r.count, "records."+r.key)
+			if err != nil {
+				return nil, err
+			}
+			for _, id := range idx {
+				v, err := scalar(sub[strconv.Itoa(id)], "uses")
+				if err != nil {
+					return nil, fmt.Errorf("records.%s.%d: %w", r.key, id, err)
+				}
+				old := GetU16Array(out, r.off, r.count, id)
+				SetU16Array(out, r.off, r.count, id, int(v))
+				if now := GetU16Array(out, r.off, r.count, id); old != now {
+					ch = append(ch, fmt.Sprintf("records.%s %d %s: %d -> %d",
+						r.key, id, lookup(r.names, id), old, now))
+				}
+			}
+		}
+		return ch, nil
+	}},
+}
+
+func commandArrayPatch(name string, count int, get func([]byte, int) int,
+	set func([]byte, int, int)) func([]byte, map[string]any) ([]string, error) {
+	return func(out []byte, m map[string]any) ([]string, error) {
+		idx, err := indexKeys(m, count, name)
+		if err != nil {
+			return nil, err
+		}
+		var ch []string
+		for _, i := range idx {
+			v, err := scalar(m[strconv.Itoa(i)], "id")
+			if err != nil {
+				return nil, fmt.Errorf("%s.%d: %w", name, i, err)
+			}
+			old := get(out, i)
+			set(out, i, int(v))
+			if old != int(v) {
+				ch = append(ch, fmt.Sprintf("%s.%d: %s -> %s",
+					name, i, CommandName(old), CommandName(int(v))))
+			}
+		}
+		return ch, nil
+	}
+}
+
+func patchAI(out []byte, ci int, cname string, raw any) ([]string, error) {
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("characters.%s.ai must be an object", cname)
+	}
+	a := GetAI(out, ci)
+	before := a
+	var ch []string
+	for _, f := range aiFields {
+		v, ok := m[f.name]
+		if !ok {
+			continue
+		}
+		n, err := scalar(v, "id")
+		if err != nil {
+			return nil, fmt.Errorf("characters.%s.ai.%s: %w", cname, f.name, err)
+		}
+		if _, known := f.table[int(n)]; !known {
+			return nil, fmt.Errorf("characters.%s.ai.%s: %d is not a known setting",
+				cname, f.name, n)
+		}
+		f.set(&a, int(n))
+	}
+	if v, ok := m["recovery_targets"]; ok {
+		n, err := asInt(v)
+		if err != nil {
+			return nil, fmt.Errorf("characters.%s.ai.recovery_targets: %w", cname, err)
+		}
+		a.RecoveryTargets = int(n)
+	}
+	SetAI(out, ci, a)
+	for _, f := range aiFields {
+		if f.get(before) != f.get(a) {
+			ch = append(ch, fmt.Sprintf("%s.ai.%s: %s -> %s", cname, f.name,
+				lookup(f.table, f.get(before)), lookup(f.table, f.get(a))))
+		}
+	}
+	if before.RecoveryTargets != a.RecoveryTargets {
+		ch = append(ch, fmt.Sprintf("%s.ai.recovery_targets: %d -> %d",
+			cname, before.RecoveryTargets, a.RecoveryTargets))
+	}
+	return ch, nil
+}
+
+func patchEquipment(out []byte, ci int, cname string, raw any) ([]string, error) {
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("characters.%s.equipment must be an object", cname)
+	}
+	byName := map[string]int{}
+	for i, k := range EquipKinds {
+		byName[k.Name] = i
+	}
+	var ch []string
+	for _, kname := range sortedKeys(m) {
+		ki, ok := byName[kname]
+		if !ok {
+			return nil, fmt.Errorf("characters.%s.equipment.%s is not an equipment array",
+				cname, kname)
+		}
+		k := EquipKinds[ki]
+		slots, ok := m[kname].(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("characters.%s.equipment.%s must be an object", cname, kname)
+		}
+		idx, err := indexKeys(slots, k.Slots, "characters."+cname+".equipment."+kname)
+		if err != nil {
+			return nil, err
+		}
+		for _, s := range idx {
+			where := fmt.Sprintf("characters.%s.equipment.%s.%d", cname, kname, s)
+			e, err := readEquip(slots[strconv.Itoa(s)], where)
+			if err != nil {
+				return nil, err
+			}
+			old := GetEquip(out, ci, k.Off, s)
+			SetEquip(out, ci, k.Off, s, e)
+			if old != e {
+				ch = append(ch, fmt.Sprintf("%s.%s.%d: %s -> %s",
+					cname, kname, s, equipLabel(old), equipLabel(e)))
+			}
+		}
+	}
+	return ch, nil
+}
+
+func equipLabel(e Equip) string {
+	if e.Empty() {
+		return "(empty)"
+	}
+	return e.Name()
+}
+
+// readEquip decodes one slot. Writing null clears it, which is how a slot is
+// emptied given the dump omits empty slots entirely.
+func readEquip(v any, where string) (Equip, error) {
+	if v == nil {
+		return Equip{}, nil
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		return Equip{}, fmt.Errorf("%s must be an object or null", where)
+	}
+	e := Equip{Enabled: true}
+	id, err := scalar(m, "id")
+	if err != nil {
+		return Equip{}, fmt.Errorf("%s: %w", where, err)
+	}
+	t, ok := m["type"]
+	if !ok {
+		return Equip{}, fmt.Errorf("%s needs a \"type\" key: an id means nothing without it", where)
+	}
+	tn, err := asInt(t)
+	if err != nil {
+		return Equip{}, fmt.Errorf("%s.type: %w", where, err)
+	}
+	if id < 0 || id > 0xFF {
+		return Equip{}, fmt.Errorf("%s.id %d is outside 0-255", where, id)
+	}
+	if _, known := ItemTypes[int(tn)]; !known {
+		return Equip{}, fmt.Errorf("%s.type %d is not a known item type", where, tn)
+	}
+	e.ID, e.ItemType = int(id), int(tn)
+	if en, ok := m["enabled"]; ok {
+		n, err := asInt(en)
+		if err != nil {
+			return Equip{}, fmt.Errorf("%s.enabled: %w", where, err)
+		}
+		e.Enabled = n != 0
+	}
+	return e, nil
 }
 
 func abilityWord(v any) (uint32, error) {
