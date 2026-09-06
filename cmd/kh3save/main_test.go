@@ -85,6 +85,32 @@ func TestSchemaCommandListsEverySection(t *testing.T) {
 	if !strings.Contains(out, kh3.DocFormat) {
 		t.Error("schema output does not say which document format it describes")
 	}
+	// A section the schema marks as spoiling is covered in the browser until
+	// the reader asks for it, and that is part of what this description says
+	// about a region rather than a detail of one front end. Somebody writing
+	// their own has to be able to see it here.
+	//
+	// A long warning is wrapped across comment lines, so both sides are
+	// flattened before comparing: the continuation gutter is joined back up
+	// and runs of whitespace collapsed. Comparing the raw strings passes only
+	// for warnings short enough to fit one line, which is a check that quietly
+	// asserts nothing about the others.
+	flat := func(s string) string { return strings.Join(strings.Fields(s), " ") }
+	joined := flat(strings.ReplaceAll(out, "\n    # ", " "))
+
+	marked := 0
+	for _, sec := range kh3.Sections() {
+		if sec.Spoils == "" {
+			continue
+		}
+		marked++
+		if !strings.Contains(joined, flat("spoilers: "+sec.Spoils)) {
+			t.Errorf("schema output does not carry the spoiler warning on %q", sec.Key)
+		}
+	}
+	if marked == 0 {
+		t.Error("no section is marked as spoiling, so this check is asserting nothing")
+	}
 	for _, line := range strings.Split(out, "\n") {
 		if strings.HasSuffix(line, " ") {
 			t.Errorf("line has trailing whitespace: %q", line)

@@ -78,6 +78,16 @@ func printSection(sec kh3.Section, prefix string) {
 			fmt.Printf("    # %s\n", line)
 		}
 	}
+	// Marked rather than folded into the notes above, because it is a
+	// different kind of statement: a note says where an offset came from, this
+	// says the interface covers this region until the reader asks for it. A
+	// reader of this output who is writing their own front end needs to know
+	// that, and greps for it.
+	if sec.Spoils != "" {
+		for _, line := range wrap("spoilers: "+sec.Spoils, 74) {
+			fmt.Printf("    # %s\n", line)
+		}
+	}
 	if sec.Requires == "records" {
 		fmt.Println("    # only on a save long enough to reach the record block")
 	}
