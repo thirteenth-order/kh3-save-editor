@@ -43,6 +43,7 @@ class Node {
   removeAttribute(k) { delete this.attrs[k]; }
   querySelector() { return null; }
   querySelectorAll() { return []; }
+  remove() {}
   scrollIntoView() {}
   focus() {}
   select() {}
@@ -55,12 +56,24 @@ class Node {
 class Text extends Node {
   constructor(t) { super("#text"); this._text = t; }
 }
+// Nodes the page addresses by id -- #app, #toasts, #modal, #topbar. They are
+// kept rather than minted per call, because the shell holds on to the one it
+// got at load and paints into it later: a fresh node each time would mean
+// nothing a check could look at afterwards.
+const byId = new Map();
+
 const doc = {
   createElement(tag) { return new Node(tag); },
   createElementNS(ns, tag) { return new Node(tag, ns); },
   createTextNode(t) { return new Text(t); },
   createDocumentFragment() { return new Node("#fragment"); },
-  getElementById() { return new Node("div"); },
+  getElementById(id) {
+    if (!byId.has(id)) byId.set(id, new Node("div"));
+    return byId.get(id);
+  },
+  // The shell asks for the page wrapper by class to widen it for a workspace.
+  // Handing back a node is enough: nothing reads anything off it.
+  querySelector() { return new Node("div"); },
   querySelectorAll() { return []; },
   execCommand() { return false; },
 };

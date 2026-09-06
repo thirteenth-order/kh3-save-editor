@@ -308,8 +308,8 @@ func TestJSONContract(t *testing.T) {
 func TestUIReadsOnlyKeysWeSend(t *testing.T) {
 	// The markup and the scripts are separate assets now, so scan all of them.
 	var page []byte
-	for _, name := range []string{"assets/index.html", "assets/ui.js", "assets/editor.js",
-		"assets/schema.js", "assets/forms.js", "assets/overview.js",
+	for _, name := range []string{"assets/index.html", "assets/diffs.js", "assets/ui.js",
+		"assets/editor.js", "assets/schema.js", "assets/forms.js", "assets/overview.js",
 		"assets/app.js"} {
 		blob, err := assets.ReadFile(name)
 		if err != nil {
@@ -385,6 +385,106 @@ func TestPageAssetsCarryTheToken(t *testing.T) {
 		}
 		if ct := w.Header().Get("Content-Type"); strings.HasPrefix(ct, "text/plain") {
 			t.Errorf("%s: content type %q, which a browser will refuse", m[1], ct)
+		}
+	}
+}
+
+// The page's scripts are ES modules, so the token travels as a path segment
+// rather than a query parameter: a relative import inherits the path and not
+// the query. That is a third transport for the same token, and a third
+// transport is exactly the kind of change that quietly opens a door, so the
+// doors it must not open are named here one at a time.
+func TestAssetPathTokenIsStillTheOnlyWayIn(t *testing.T) {
+	s := &Server{token: newToken(), addr: "127.0.0.1:54321", mux: http.NewServeMux()}
+	s.mux.HandleFunc("/", s.guard(s.handleIndex))
+
+	get := func(path string) int {
+		r := httptest.NewRequest("GET", "http://127.0.0.1:54321"+path, nil)
+		r.Host = "127.0.0.1:54321"
+		w := httptest.NewRecorder()
+		s.mux.ServeHTTP(w, r)
+		return w.Code
+	}
+
+	if code := get(assetPrefix + s.token + "/app.js"); code != http.StatusOK {
+		t.Errorf("the real asset path gave %d, want 200", code)
+	}
+
+	// Everything below must not reach an asset. A wrong token is the obvious
+	// one; the rest are the shapes that could hand the guard a token it never
+	// should have looked at.
+	for _, path := range []string{
+		assetPrefix + newToken() + "/app.js", // someone else's token
+		assetPrefix + "/app.js",              // no token segment at all
+		assetPrefix + s.token + "/",          // token, no file
+		assetPrefix + s.token,                // token, nothing after it
+		"/app.js",                            // the old query-string form, bare
+		"/app.js?t=" + s.token,               // and with a token where one no
+		"/ui.js?t=" + s.token,                // longer belongs
+	} {
+		if code := get(path); code == http.StatusOK {
+			t.Errorf("%s: code 200, want a refusal", path)
+		}
+	}
+
+	// A file that is not on the allow-list is not an asset request, so a valid
+	// token in its path is never even read: the answer is the same 403 an
+	// unauthenticated caller gets, not a 404 that confirms the token was good.
+	if code := get(assetPrefix + s.token + "/../server.go"); code == http.StatusOK {
+		t.Error("traversal out of the asset prefix reached something")
+	}
+	if code := get(assetPrefix + s.token + "/index.html"); code == http.StatusOK {
+		t.Error("index.html is servable from the asset prefix")
+	}
+	if code := get(assetPrefix + s.token + "/nothing.js"); code != http.StatusForbidden {
+		t.Errorf("an unlisted name gave %d, want 403 rather than a 404 that "+
+			"tells the caller their token was accepted", code)
+	}
+}
+
+// The page names one entry point and reaches the rest through imports, so the
+// allow-list and the import graph have to agree. When they did not, the module
+// 404'd, the browser reported it as a bare network error, and the page came up
+// blank with nothing in the logs pointing at the missing name.
+func TestEveryImportedModuleIsOnTheAllowList(t *testing.T) {
+	entries, err := assets.ReadDir("assets")
+	if err != nil {
+		t.Fatal(err)
+	}
+	imports := regexp.MustCompile(`(?m)^import\s.*?from\s+"\./([^"]+)"`)
+	seen := 0
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".js") {
+			continue
+		}
+		blob, err := assets.ReadFile("assets/" + e.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range imports.FindAllStringSubmatch(string(blob), -1) {
+			seen++
+			if _, ok := staticFiles[m[1]]; !ok {
+				t.Errorf("%s imports %q, which staticFiles does not serve", e.Name(), m[1])
+			}
+		}
+	}
+	if seen == 0 {
+		t.Fatal("found no imports at all; the scan is not reading the modules")
+	}
+
+	// And the other direction, for the entry point the markup names.
+	page, err := assets.ReadFile("assets/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	refs := regexp.MustCompile(`(?:href|src)="/a/{{token}}/([^"]+)"`).
+		FindAllStringSubmatch(string(page), -1)
+	if len(refs) < 2 {
+		t.Fatalf("expected the page to name its stylesheet and entry point, found %d", len(refs))
+	}
+	for _, m := range refs {
+		if _, ok := staticFiles[m[1]]; !ok {
+			t.Errorf("index.html asks for %q, which staticFiles does not serve", m[1])
 		}
 	}
 }

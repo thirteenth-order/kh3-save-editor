@@ -5,12 +5,16 @@
 // what range the format allows -- comes out of that one document, which is the
 // same description the format tests hold against a dump. Add a field to the
 // save and it appears here; there is no widget to write.
-"use strict";
+// Modules are always strict, so there is no "use strict" here. They are
+// modules because the server hands every asset out under a path that carries
+// the run's token, so a relative import inherits it; see assetPrefix in
+// server.go for why the query string could not do that job.
+import { api } from "./ui.js";
 
-let SCHEMA = null;
+export let SCHEMA = null;
 let TABLES = null; // name -> {list:[{id,name}], byId:Map}
 
-async function loadSchema() {
+export async function loadSchema() {
   if (SCHEMA) return SCHEMA;
   const s = await api("/api/schema");
   TABLES = {};
@@ -24,9 +28,9 @@ async function loadSchema() {
   return s;
 }
 
-function table(name) { return (TABLES && TABLES[name]) || { list: [], byId: new Map() }; }
+export function table(name) { return (TABLES && TABLES[name]) || { list: [], byId: new Map() }; }
 
-function tableName(name, id) {
+export function tableName(name, id) {
   const t = table(name).byId;
   return t.has(id) ? t.get(id) : "?";
 }
@@ -37,7 +41,7 @@ function tableName(name, id) {
 // it only needs to know which quoted strings are keys and how deep they are,
 // which is enough to rebuild the path of every line without building values.
 
-function indexLines(text) {
+export function indexLines(text) {
   const at = new Map();
   // Containers with no key of their own -- the document itself, and any array
   // element -- push null and contribute no path segment. A dump is objects all
@@ -95,7 +99,7 @@ function indexLines(text) {
 
 // asNumber mirrors the server's asInt: a number, a decimal or 0x string, or a
 // boolean. Anything else is not a number, and says so rather than becoming 0.
-function asNumber(v) {
+export function asNumber(v) {
   if (typeof v === "number") return Number.isInteger(v) ? v : null;
   if (typeof v === "boolean") return v ? 1 : 0;
   if (typeof v === "string") {
@@ -109,7 +113,7 @@ function asNumber(v) {
 
 // scalarOf pulls the value out of an entry that may be the whole dumped object
 // or just the bare number, which is what Patch accepts.
-function scalarOf(entry, key) {
+export function scalarOf(entry, key) {
   if (entry && typeof entry === "object") return key in entry ? asNumber(entry[key]) : null;
   return asNumber(entry);
 }
@@ -119,7 +123,7 @@ function scalarOf(entry, key) {
 // while it is being typed rather than after a round trip. The server is still
 // the authority: nothing is written without its dry run agreeing.
 
-function validate(doc, caps) {
+export function validate(doc, caps) {
   const problems = [];
   const add = function (path, message, severity) {
     problems.push({ path: path, message: message, severity: severity || "err" });

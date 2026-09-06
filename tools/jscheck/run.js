@@ -9,7 +9,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const vm = require("vm");
+const { pathToFileURL } = require("url");
 const { doc } = require("./dom.js");
 
 const dir = process.argv[2];
@@ -17,22 +17,85 @@ const assets = path.join(__dirname, "..", "..", "internal", "gui", "assets");
 const schema = JSON.parse(fs.readFileSync(path.join(dir, "schema.json"), "utf8"));
 const detail = JSON.parse(fs.readFileSync(path.join(dir, "detail.json"), "utf8"));
 
-const ctx = vm.createContext({
-  console, URLSearchParams, setTimeout, clearTimeout,
+// The assets are ES modules, so they are imported rather than evaluated in a
+// vm context: vm cannot run a module without an experimental flag, and there
+// was never any isolation worth keeping here. This is a one-shot check, not a
+// sandbox. The modules read these off the global scope the same way they would
+// read them off a window.
+Object.assign(globalThis, {
+  document: doc,
+  location: { search: "?t=test" },
+  navigator: {},
   Event: class { constructor(t) { this.type = t; } },
-  location: { search: "" }, document: doc, navigator: {},
-  fetch: async function () { return { ok: true, json: async function () { return {}; } }; },
+  // The shell reaches for these at import time.
+  history: { pushState() {}, back() {} },
+  addEventListener() {},
+  scrollTo() {},
+  scrollY: 0,
+  // loadSchema is the only thing here that talks to the server, and it goes
+  // through api(), which goes through fetch. Stubbing the transport rather
+  // than the function is what keeps the real api() in the path being checked,
+  // and answering by route is what lets the shell be driven at all.
+  fetch: async function (url) {
+    const at = String(url);
+    const body = at.indexOf("/api/scan") > -1 ? SCAN
+      : at.indexOf("/api/detail") > -1 ? detail
+      : schema;
+    return { ok: true, json: async function () { return body; } };
+  },
 });
 
-for (const file of ["ui.js", "editor.js", "schema.js", "forms.js", "overview.js"]) {
-  vm.runInContext(fs.readFileSync(path.join(assets, file), "utf8"), ctx, { filename: file });
-}
-// loadSchema is the only thing here that talks to the server; hand it the
-// payload the caller already wrote out.
-ctx.PAYLOAD = schema;
-vm.runInContext("api = async function () { return PAYLOAD; };", ctx);
+// One folder holding the three shapes a slot comes in: a playthrough, the
+// system file, and one that would not open. A card is navigation now, so the
+// shell has to draw all three and open only the two that can be opened.
+const SCAN = {
+  canBrowse: true,
+  gameRunning: false,
+  dirs: [{
+    path: "/saves", displayPath: "/saves", platform: "steam",
+    accountId: "765611*******0000", cloud: false, archive: false,
+    slots: [
+      {
+        file: "KHIII_slot0.bin", path: "/saves/KHIII_slot0.bin",
+        displayPath: "/saves/KHIII_slot0.bin", slot: "slot0",
+        difficulty: 3, difficultyName: "Critical", level: 7,
+        playtime: "1:38:16", munny: 583, location: "Mount Olympus",
+        account: "765611*******0000", format: "steam", world: "Olympus",
+        canGrantStartItem: true, canRevokeStartItem: false,
+      },
+      {
+        file: "KHIII_system.bin", path: "/saves/KHIII_system.bin",
+        displayPath: "/saves/KHIII_system.bin", slot: "system",
+        difficulty: 0, difficultyName: "", level: 0, playtime: "", munny: 0,
+        location: "", account: "", format: "steam", world: "",
+        canGrantStartItem: false, canRevokeStartItem: false,
+      },
+      {
+        file: "bad.bin", path: "/saves/bad.bin", displayPath: "/saves/bad.bin",
+        slot: "slot2", error: "could not decrypt this save",
+      },
+    ],
+  }],
+};
 
-const get = function (name) { return vm.runInContext(name, ctx); };
+// The shell paints on import and again on navigation, both asynchronously.
+// Nothing here fires a real event, so a couple of turns of the loop is what
+// standing in for one looks like.
+const settle = function () {
+  return new Promise(function (r) { setTimeout(r, 0); });
+};
+
+// Namespace objects, not a merged copy: an export like SCHEMA is a live
+// binding that loadSchema reassigns, and a snapshot taken now would read null
+// for the rest of the run.
+let mods = [];
+const get = function (name) {
+  for (const m of mods) if (name in m) return m[name];
+  throw new Error("nothing exports " + name);
+};
+const load = function (file) {
+  return import(pathToFileURL(path.join(assets, file)).href);
+};
 
 let fails = 0;
 function ok(name, cond, extra) {
@@ -42,6 +105,8 @@ function ok(name, cond, extra) {
 }
 
 (async function () {
+  mods = await Promise.all(["diffs.js", "ui.js", "editor.js", "schema.js",
+                            "forms.js", "overview.js"].map(load));
   await get("loadSchema")();
   const validate = get("validate");
   const caps = { records: !!(detail.records && detail.records.minigames) };
@@ -226,6 +291,62 @@ function ok(name, cond, extra) {
   const meters = [...board.walk()].filter(function (n) { return n.classList.contains("meter"); });
   ok("a meter is drawn for level and for lucky emblems", meters.length === 2,
     "got " + meters.length);
+
+  /* --------------------------------------------------------------- the shell */
+  // app.js is the entry point, so importing it is what runs it: it paints the
+  // list of saves on load. Nothing is exported for the sake of this check -- a
+  // card is opened by calling the handler the shell put on it, which is what a
+  // click does, and that is the whole navigation path.
+
+  await import(pathToFileURL(path.join(assets, "app.js")).href);
+  await settle();
+  await settle();
+
+  const page = doc.getElementById("app");
+  const reads = function () { return page.textContent; };
+  const painted = function () { return [...page.walk()]; };
+
+  ok("the shell paints the list of saves", reads().indexOf("slot0") > -1);
+  ok("it draws every slot, including the one that will not open",
+    reads().indexOf("system") > -1 && reads().indexOf("could not decrypt") > -1);
+
+  // The swap moved into the workspace, so the card must no longer carry it.
+  ok("the card is navigation and not a control surface",
+    reads().indexOf("Apply") < 0 && reads().indexOf("current setting") < 0);
+
+  const cards = painted().filter(function (n) {
+    return n.classList.contains("nav") && typeof n.onclick === "function";
+  });
+  // Two of the three open: the broken one is inert on purpose.
+  ok("two of the three slots are openable", cards.length === 2, "got " + cards.length);
+
+  cards[0].onclick();
+  await settle();
+  await settle();
+
+  const ws = reads();
+  ok("opening a save reaches the workspace", ws.indexOf("All saves") > -1);
+  // Read from the dump rather than from the scan stub: the head renders the
+  // save that was opened, and hardcoding a value here would pass whatever the
+  // fixture happened to hold.
+  const named = get("diffMeta")(detail.header.difficulty).name;
+  ok("the workspace leads with what the save is",
+    ws.indexOf(named) > -1 && ws.indexOf("level " + detail.header.level) > -1,
+    "wanted " + named + " and level " + detail.header.level);
+  ok("the difficulty swap is one action in it, not the page",
+    ws.indexOf("Change difficulty") > -1);
+  ok("all three views are offered", ws.indexOf("Summary") > -1 &&
+    ws.indexOf("Fields") > -1 && ws.indexOf("Document") > -1);
+  ok("the dashboard is what it opens on", ws.indexOf("Olympus") > -1 &&
+    ws.indexOf("Lucky emblems") > -1);
+
+  // The system file has no difficulty and no characters. It still opens, and
+  // it has to say what it is rather than drawing an empty playthrough.
+  cards[1].onclick();
+  await settle();
+  await settle();
+  ok("the system file opens and says what it is",
+    reads().indexOf("System file") > -1);
 
   console.log(fails ? "\n" + fails + " check(s) failed" : "\nall good");
   process.exit(fails ? 1 : 0);

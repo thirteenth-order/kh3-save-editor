@@ -7,7 +7,11 @@
 // cannot do is color its own text, and a <pre> underneath it does that. The
 // two are kept in lockstep by sharing one scroll container and one set of font
 // metrics, which is why app.css declares them together rather than separately.
-"use strict";
+// Modules are always strict, so there is no "use strict" here. They are
+// modules because the server hands every asset out under a path that carries
+// the run's token, so a relative import inherits it; see assetPrefix in
+// server.go for why the query string could not do that job.
+import { el } from "./ui.js";
 
 // Above this many characters the highlight is dropped and the editor stays
 // plain. Re-tokenising on a debounce is cheap for a normal dump -- a real save
@@ -26,7 +30,7 @@ function escapeHTML(s) {
 // matches is punctuation and whitespace and goes through untouched.
 const JSON_TOKENS = /("(?:\\.|[^"\\])*")(\s*:)?|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
 
-function highlightJSON(text) {
+export function highlightJSON(text) {
   let out = "";
   let last = 0;
   let m;
@@ -58,7 +62,7 @@ function lineOf(text, pos) {
 // parseError normalizes what the browsers say. Chrome gives "at position 42",
 // Firefox "at line 3 column 5", Safari neither, so take whichever is there and
 // fall back to the message alone.
-function parseError(text, err) {
+export function parseError(text, err) {
   const msg = String(err.message || err);
   let at = null;
   let m = /at position (\d+)/.exec(msg);
@@ -82,7 +86,7 @@ function insert(area, text) {
   area.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-function codeEditor(opts) {
+export function codeEditor(opts) {
   // opts: { value, onChange(text) }
   const wrap = el("div", "code");
   const gutter = el("div", "gutter");

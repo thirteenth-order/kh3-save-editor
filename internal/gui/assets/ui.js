@@ -1,12 +1,15 @@
 // Shared primitives: the API client, the DOM helpers every view builds out of,
 // the toast rail, the confirm dialog, and the combo box.
 //
-// No framework and no build step. These are plain functions in the global
-// scope, loaded before the views that use them, because the page's CSP allows
-// no inline script and a module import would need the token in its URL.
-"use strict";
+// No framework and no build step. These are plain ES modules the browser loads
+// as written, and the binary embeds the same bytes.
+// Modules are always strict, so there is no "use strict" here. They are
+// modules because the server hands every asset out under a path that carries
+// the run's token, so a relative import inherits it; see assetPrefix in
+// server.go for why the query string could not do that job.
+import { DIFFS } from "./diffs.js";
 
-const TOKEN = new URLSearchParams(location.search).get("t") || "";
+export const TOKEN = new URLSearchParams(location.search).get("t") || "";
 
 // The token stays in the address bar deliberately. Scrubbing it with
 // history.replaceState keeps it out of browser history, but then a reload has
@@ -14,11 +17,17 @@ const TOKEN = new URLSearchParams(location.search).get("t") || "";
 // worth it: the token is 32 bytes of crypto/rand, minted per run and dead the
 // moment the process exits, so a stale copy in history cannot be replayed.
 
-// An <img> cannot set the token header, so it travels in the query string.
-// Same gate, same value, just the transport the tag supports.
-const EMBLEM = "/emblem.svg?t=" + encodeURIComponent(TOKEN);
+// Where the server is handing out assets this run, token segment and all.
+// Taking it from import.meta.url rather than rebuilding it out of TOKEN keeps
+// the shape of an asset URL known in one place -- the server -- so a change
+// there cannot leave a hand-assembled copy here pointing at a 403.
+export const ASSETS = new URL(".", import.meta.url).href;
 
-async function api(path, body) {
+// An <img> cannot set the token header, so it takes the same token-carrying
+// path the modules do. Same gate, same value, the transport the tag supports.
+export const EMBLEM = ASSETS + "emblem.svg";
+
+export async function api(path, body) {
   const r = await fetch(path, {
     method: body === undefined ? "GET" : "POST",
     headers: { "X-KH3-Token": TOKEN, "Content-Type": "application/json" },
@@ -29,7 +38,7 @@ async function api(path, body) {
   return data;
 }
 
-function el(tag, cls, text) {
+export function el(tag, cls, text) {
   const n = document.createElement(tag);
   if (cls) n.className = cls;
   if (text != null) n.textContent = text;
@@ -37,7 +46,7 @@ function el(tag, cls, text) {
 }
 
 // <use> into the sprite in index.html, so an icon costs one small element.
-function icon(name) {
+export function icon(name) {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
   use.setAttribute("href", "#" + name);
@@ -47,14 +56,14 @@ function icon(name) {
   return svg;
 }
 
-function chip(name, text, cls) {
+export function chip(name, text, cls) {
   const n = el("span", "chip" + (cls ? " " + cls : ""));
   if (name) n.append(icon(name));
   n.append(el("span", null, text));
   return n;
 }
 
-function pill(text, name, cls) {
+export function pill(text, name, cls) {
   const b = el("button", "pill" + (cls ? " " + cls : ""));
   b.type = "button";
   if (name) b.append(icon(name));
@@ -62,7 +71,7 @@ function pill(text, name, cls) {
   return b;
 }
 
-function toast(text, kind) {
+export function toast(text, kind) {
   const rail = document.getElementById("toasts");
   const n = el("div", "toast" + (kind ? " " + kind : ""));
   n.append(icon(kind === "bad" ? "i-alert" : kind === "good" ? "i-check" : "i-sparkle"),
@@ -74,7 +83,7 @@ function toast(text, kind) {
   }, 4600);
 }
 
-function copyToClipboard(text, what) {
+export function copyToClipboard(text, what) {
   if (!navigator.clipboard) { toast("Clipboard is not available here", "bad"); return; }
   navigator.clipboard.writeText(text).then(
     function () { toast((what || "Text") + " copied", "good"); },
@@ -82,7 +91,7 @@ function copyToClipboard(text, what) {
 }
 
 // Stagger the entrance so a list cascades rather than snapping in.
-function stagger(parent) {
+export function stagger(parent) {
   parent.classList.add("stagger");
   Array.prototype.forEach.call(parent.children, function (node, i) {
     node.style.setProperty("--n", Math.min(i, 10));
@@ -91,7 +100,7 @@ function stagger(parent) {
 
 // The label wraps its own input, so these need no ids and can be built once
 // per save rather than once per page.
-function optionSwitch(html, on) {
+export function optionSwitch(html, on) {
   const label = el("label", "opt");
   const input = document.createElement("input");
   input.type = "checkbox";
@@ -106,13 +115,13 @@ function optionSwitch(html, on) {
   return { node: label, input: input };
 }
 
-function heading(name, text) {
+export function heading(name, text) {
   const h = el("h2");
   h.append(icon(name), el("span", null, text));
   return h;
 }
 
-function banner(tone, name, title, text) {
+export function banner(tone, name, title, text) {
   const n = el("div", "banner " + tone);
   const badge = el("div", "ico");
   badge.append(icon(name));
@@ -127,7 +136,7 @@ function banner(tone, name, title, text) {
 // cannot show the change list with any structure; this can, and it inherits
 // Esc, focus trapping and the backdrop for free from <dialog>.
 
-function ask(opts) {
+export function ask(opts) {
   // <dialog>, for close() and showModal(). getElementById cannot say so
   // on its own, and this is the element the whole function is about.
   const modal = /** @type {HTMLDialogElement} */ (document.getElementById("modal"));
@@ -181,7 +190,7 @@ function ask(opts) {
 // It is not a <datalist>: that cannot show the id alongside the name, cannot be
 // styled, and on several browsers will not open on focus.
 
-function combo(opts) {
+export function combo(opts) {
   // opts: { entries:[{id,name}], value, onPick(id), placeholder, allowFree }
   const wrap = el("div", "combo");
   const input = document.createElement("input");

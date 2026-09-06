@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>KH3 Save Editor</title>
-<link rel="icon" href="/icon.svg?t={{token}}" type="image/svg+xml">
-<link rel="stylesheet" href="/app.css?t={{token}}">
+<link rel="icon" href="/a/{{token}}/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/a/{{token}}/app.css">
 </head>
 <body>
 
@@ -184,14 +184,11 @@
   </div>
 </dialog>
 
-<!-- Classic scripts in dependency order: the CSP allows no inline script, and
-     a module import would need the token in its own URL, which the tag cannot
-     know. Each defines plain functions in the shared global scope. -->
-<script src="/ui.js?t={{token}}"></script>
-<script src="/editor.js?t={{token}}"></script>
-<script src="/schema.js?t={{token}}"></script>
-<script src="/forms.js?t={{token}}"></script>
-<script src="/overview.js?t={{token}}"></script>
-<script src="/app.js?t={{token}}"></script>
+<!-- One entry point. The rest of the page is reached through its imports, so
+     there is no load order to keep in sync here, and adding a module means
+     adding it to the server's allow-list and importing it -- not editing this
+     file. The token is a path segment because a relative import inherits the
+     path and not the query string; see assetPrefix in server.go. -->
+<script type="module" src="/a/{{token}}/app.js"></script>
 </body>
 </html>

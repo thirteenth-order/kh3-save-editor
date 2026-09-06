@@ -6,7 +6,12 @@
 // typed into a number box is how somebody equips a snack where they meant a
 // keyblade. A picker over the real table makes the choice, and the JSON view is
 // there for the bulk edits a form is bad at.
-"use strict";
+// Modules are always strict, so there is no "use strict" here. They are
+// modules because the server hands every asset out under a path that carries
+// the run's token, so a relative import inherits it; see assetPrefix in
+// server.go for why the query string could not do that job.
+import { combo, el, icon, optionSwitch, pill, toast } from "./ui.js";
+import { SCHEMA, asNumber, table, tableName } from "./schema.js";
 
 // EMPTY_ENTRY says what "clear this" writes for each kind of section, because
 // deleting a key from the document means "leave it alone", not "empty it".
@@ -561,7 +566,7 @@ function defaultEntry(sec) {
 // build their bodies on first open: a full dump is sixteen characters of five
 // hundred abilities each, and rendering all of it up front would cost a second
 // of layout for the sake of controls nobody has scrolled to.
-function buildForm(state) {
+export function buildForm(state) {
   const wrap = el("div", "form");
   const ctx = { edited: state.edited, caps: state.caps };
   for (const sec of SCHEMA.sections) {

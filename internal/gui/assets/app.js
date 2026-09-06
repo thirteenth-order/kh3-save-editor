@@ -2,25 +2,19 @@
 // against the local API described in server.go, split across four assets --
 // ui.js for the primitives, editor.js for the JSON editor, schema.js and
 // forms.js for the schema-driven half, and this file for the shell.
-"use strict";
-
-// Difficulty is the one axis the whole page turns on, so name, color and
-// sigil live together and everything else indexes into this.
-// A save with a difficulty byte outside 0-3 is corrupt or from a future
-// format version. Fall back rather than throwing, so one bad slot cannot stop
-// the whole page rendering.
-const UNKNOWN_DIFF = { name: "unknown", hue: "var(--dim)", sig: "sig0" };
-function diffMeta(i) { return DIFFS[i] || UNKNOWN_DIFF; }
-
-const DIFFS = [
-  { name: "Beginner", hue: "var(--beginner)", sig: "sig0" },
-  { name: "Standard", hue: "var(--standard)", sig: "sig1" },
-  { name: "Proud",    hue: "var(--proud)",    sig: "sig2" },
-  { name: "Critical", hue: "var(--critical)", sig: "sig3" },
-];
-
-// Critical is the only difficulty that changes anything outside the flag.
-const CRITICAL = 3;
+// Modules are always strict, so there is no "use strict" here. They are
+// modules because the server hands every asset out under a path that carries
+// the run's token, so a relative import inherits it; see assetPrefix in
+// server.go for why the query string could not do that job.
+import { CRITICAL, DIFFS, diffMeta } from "./diffs.js";
+import {
+  EMBLEM, api, ask, banner, chip, copyToClipboard, el, heading, icon,
+  optionSwitch, pill, stagger, toast,
+} from "./ui.js";
+import { codeEditor, parseError } from "./editor.js";
+import { SCHEMA, indexLines, loadSchema, validate } from "./schema.js";
+import { buildForm } from "./forms.js";
+import { overview } from "./overview.js";
 
 const app = document.getElementById("app");
 const topbar = document.getElementById("topbar");

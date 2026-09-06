@@ -16,7 +16,12 @@
 //
 // Every value reaches the DOM through textContent. Map paths, character names
 // and folder names come out of the save file and are attacker-controlled text.
-"use strict";
+// Modules are always strict, so there is no "use strict" here. They are
+// modules because the server hands every asset out under a path that carries
+// the run's token, so a relative import inherits it; see assetPrefix in
+// server.go for why the query string could not do that job.
+import { chip, el, icon } from "./ui.js";
+import { SCHEMA } from "./schema.js";
 
 /* ------------------------------------------------------------- schema -- */
 // The dashboard reads the published schema for two things: the soft ranges
@@ -479,7 +484,7 @@ function ovStory(doc) {
 
 /* --------------------------------------------------------------- view -- */
 
-function overview(slot, doc) {
+export function overview(slot, doc) {
   const wrap = el("div", "ov");
   const system = doc.characters && !Object.keys(doc.characters).length &&
     (!doc.header || doc.header.difficulty === undefined);
