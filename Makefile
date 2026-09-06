@@ -73,6 +73,11 @@ fixture: ## write a synthetic save tree to /tmp/kh3-fixture
 	@rm -rf /tmp/kh3-fixture
 	@$(GO) run ./tools/genfixture -layout /tmp/kh3-fixture
 
+.PHONY: fixture-full
+fixture-full: ## same, at the size of a real save so the tail regions are there
+	@rm -rf /tmp/kh3-fixture-full
+	@$(GO) run ./tools/genfixture -layout -full /tmp/kh3-fixture-full
+
 .PHONY: demo
 demo: ## re-record the README terminal GIFs (needs asciinema and agg)
 	@tools/demo/record.sh $(SCENES)

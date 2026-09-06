@@ -201,7 +201,7 @@ function combo(opts) {
   function labelFor(id) {
     // A null value means nothing is chosen yet, which is what the "add one of
     // these" pickers start as: the box shows its placeholder rather than the
-    // number -1 in the colour reserved for an id no table covers.
+    // number -1 in the color reserved for an id no table covers.
     if (id === null || id === undefined) return "";
     for (const e of entries) if (e.id === id) return e.name + "  ·  " + id;
     return String(id);

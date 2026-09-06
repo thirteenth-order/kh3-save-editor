@@ -170,7 +170,7 @@ function refIn(obj, key) {
 }
 
 // entryRef reaches into an entry that a dump may have written as an object or
-// a bare number, and normalises it to the object form on the first edit.
+// a bare number, and normalizes it to the object form on the first edit.
 function entryRef(owner, index, key) {
   return {
     get: function () {

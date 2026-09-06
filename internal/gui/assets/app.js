@@ -309,7 +309,7 @@ function summary(doc) {
       for (const s of Object.keys(g).sort()) if (g[s]) worn.push(g[s].name);
     }
     if (!worn.length) continue;
-    const r = row(name, "hp " + c.hp + " mp " + c.mp + " — " + worn.join(", "));
+    const r = row(name, "hp " + c.hp + " mp " + c.mp + " · " + worn.join(", "));
     if (r) wrap.append(r);
   }
   return wrap;

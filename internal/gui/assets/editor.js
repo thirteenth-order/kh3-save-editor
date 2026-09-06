@@ -4,7 +4,7 @@
 // It is a textarea and not a contenteditable on purpose. A textarea keeps the
 // caret, selection, undo stack, spellcheck suppression, IME and mobile
 // keyboards that a contenteditable has to reimplement badly; the only thing it
-// cannot do is colour its own text, and a <pre> underneath it does that. The
+// cannot do is color its own text, and a <pre> underneath it does that. The
 // two are kept in lockstep by sharing one scroll container and one set of font
 // metrics, which is why app.css declares them together rather than separately.
 "use strict";
@@ -55,7 +55,7 @@ function lineOf(text, pos) {
   return { line: line, col: pos - upto.lastIndexOf("\n") };
 }
 
-// parseError normalises what the browsers say. Chrome gives "at position 42",
+// parseError normalizes what the browsers say. Chrome gives "at position 42",
 // Firefox "at line 3 column 5", Safari neither, so take whichever is there and
 // fall back to the message alone.
 function parseError(text, err) {
