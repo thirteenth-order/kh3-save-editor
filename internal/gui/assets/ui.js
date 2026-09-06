@@ -128,7 +128,9 @@ function banner(tone, name, title, text) {
 // Esc, focus trapping and the backdrop for free from <dialog>.
 
 function ask(opts) {
-  const modal = document.getElementById("modal");
+  // <dialog>, for close() and showModal(). getElementById cannot say so
+  // on its own, and this is the element the whole function is about.
+  const modal = /** @type {HTMLDialogElement} */ (document.getElementById("modal"));
   return new Promise(function (resolve) {
     let settled = false;
     function finish(ok) {

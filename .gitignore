@@ -24,6 +24,9 @@ KHIII_*.bin
 # extension, then un-ignore the ones that genuinely belong to the repo by name.
 *.json
 !testdata/golden.json
+!tools/jscheck/package.json
+!tools/jscheck/package-lock.json
+!tools/jscheck/tsconfig.json
 
 # ---------------------------------------------------------------------------
 # Regenerable working directories
@@ -36,6 +39,18 @@ KHIII_*.bin
 /work/
 /out/
 /extracted/
+
+# ---------------------------------------------------------------------------
+# Node (only tools/jscheck, and it is dev-only)
+#
+# The page ships as classic scripts with no build step: the binary embeds the
+# assets exactly as written. Nothing installed here is served, bundled or
+# distributed. The manifests above are un-ignored by name so `npm ci` can pin
+# the one devDependency; the tree it installs is regenerable and never goes in.
+# ---------------------------------------------------------------------------
+node_modules/
+npm-debug.log*
+.npm/
 
 # ---------------------------------------------------------------------------
 # Python (only tools/gen_tables.py remains, and it is build-time codegen)

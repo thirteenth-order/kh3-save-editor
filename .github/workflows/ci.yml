@@ -81,6 +81,45 @@ jobs:
           docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/src" kh3save-dev:ci \
             make lint build tables-check
 
+  browser:
+    name: browser assets
+    # The page's JavaScript is about twenty-three hundred lines that no Go test
+    # reaches. Two checks cover it, and both need node: tools/jscheck runs the
+    # validator, the form builder, the code editor and the dashboard outside a
+    # browser against the real schema and a dump of the fixture, and tsc reads
+    # the same files where they sit and finds the undefined name a run might
+    # not reach. Both skip silently when node is absent, which is right for a
+    # contributor's machine and wrong here, so node is pinned rather than left
+    # to whatever the runner image happens to ship.
+    #
+    # Nothing installed here is served or shipped. The UI is still classic
+    # scripts with no build step and the binary embeds the assets as written.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.24'
+          cache: false
+
+      - name: install the one devDependency
+        working-directory: tools/jscheck
+        run: npm ci --no-fund --no-audit
+
+      - name: type-check the assets
+        working-directory: tools/jscheck
+        run: ./node_modules/.bin/tsc -p tsconfig.json
+
+      # Fails rather than skips: node is present, so the harness must have run.
+      - name: run the browser-side checks
+        run: |
+          go test ./internal/gui -run TestBrowserLogicHoldsUp -count=1 -v \
+            | tee out.txt
+          grep -q "all good" out.txt
+
   generated:
     name: generated files are current
     # tables.go is generated from KHSave.Lib3; the web UI artwork is generated

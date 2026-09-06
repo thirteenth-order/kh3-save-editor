@@ -1,0 +1,34 @@
+{
+  "//": [
+    "Type-checks the page's own JavaScript without changing a byte of it.",
+    "",
+    "allowJs + checkJs is the whole point: the assets stay plain classic",
+    "scripts that the browser loads directly, and this reads them where they",
+    "sit. There is no emit, no bundle and no output directory, so nothing",
+    "here can end up in the binary.",
+    "",
+    "moduleDetection is left at its default deliberately. The assets share one",
+    "global scope by design, because the CSP allows no inline script and a",
+    "module import could not carry the token. A file with no import or export",
+    "is a script to the checker too, which is what lets app.js see el() from",
+    "ui.js instead of reporting every helper as undefined.",
+    "",
+    "strict is off. These are DOM builders written against a browser, not a",
+    "typed codebase, and turning it on would mean annotating every closure to",
+    "buy warnings about nulls that the page already handles. What is on is the",
+    "part that pays: undefined names, misspelled properties, wrong argument",
+    "counts and calls into things that are not functions."
+  ],
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2020",
+    "module": "none",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "strict": false,
+    "noImplicitAny": false,
+    "types": []
+  },
+  "include": ["../../internal/gui/assets/*.js"]
+}

@@ -25,7 +25,11 @@ const CRITICAL = 3;
 const app = document.getElementById("app");
 const topbar = document.getElementById("topbar");
 
-for (const img of document.querySelectorAll("img.mark")) img.src = EMBLEM;
+// The cast is for the type checker, which cannot know from a selector
+// string that these are images. Nothing about it changes at runtime.
+const marks = /** @type {NodeListOf<HTMLImageElement>} */ (
+  document.querySelectorAll("img.mark"));
+for (const img of marks) img.src = EMBLEM;
 
 /* ---------------------------------------------------- segmented control -- */
 

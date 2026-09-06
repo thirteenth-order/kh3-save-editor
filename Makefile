@@ -156,10 +156,22 @@ test-go: ## go test
 test-race: ## go test under the race detector
 	@$(GO) test ./... -race -count=1
 
-
+# The browser half is about twenty-three hundred lines that no Go test reaches.
+# `go test ./internal/gui` already runs tools/jscheck, which executes it against
+# the real schema and a dump of the fixture. This is the other half of the
+# safety net: a type checker that reads the same files where they sit and finds
+# the undefined name and the misspelled property without needing a DOM to run
+# them in. It emits nothing -- the page stays classic scripts with no build
+# step, and the binary embeds the assets exactly as written.
+#
+# Both skip when node is not installed, so a machine without it can still run
+# the suite. CI pins node, so there they run by declaration and not by luck.
+.PHONY: typecheck
+typecheck: ## type-check the browser assets (needs node; skipped without it)
+	@if ! command -v node >/dev/null 2>&1; then 	  echo "node not installed; skipping the browser type check"; exit 0; fi; 	  cd tools/jscheck && 	  if [ ! -x node_modules/.bin/tsc ]; then npm ci --silent --no-fund --no-audit; fi && 	  ./node_modules/.bin/tsc -p tsconfig.json && echo "==> browser assets type-check clean"
 
 .PHONY: ci
-ci: lint test test-race tables-check emblem-check ## everything the CI workflow runs
+ci: lint test test-race typecheck tables-check emblem-check ## everything the CI workflow runs
 	@echo
 	@echo "==> all green"
 
