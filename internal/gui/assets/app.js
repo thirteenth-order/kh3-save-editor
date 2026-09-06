@@ -71,6 +71,30 @@ function segment(currentIndex, onPick) {
 }
 
 
+/* ------------------------------------------------------------ platforms -- */
+// Which mark stands for a folder or a container. The value is a directory
+// name off the disk, so it is matched loosely and falls back rather than
+// leaving a row with a hole in it.
+//
+// These are ordinary objects -- a steam valve handwheel, a shopfront, a
+// controller -- chosen to denote a platform. No company's logo is reproduced
+// here, which is what lets the footer go on saying every mark on the page is
+// original artwork. Keep it that way.
+function platformIcon(name) {
+  const at = String(name || "").toLowerCase();
+  if (at.indexOf("steam") > -1) return "i-valve";
+  if (at.indexOf("epic") > -1) return "i-store";
+  if (at.indexOf("zip") > -1) return "i-archive";
+  if (at.indexOf("added") > -1) return "i-folder";
+  return "i-stack";
+}
+
+// A container form, which is a different question from the platform: a save
+// with no Steam wrapper is what a console writes.
+function formatIcon(format) {
+  return format === "steam" ? "i-valve" : "i-gamepad";
+}
+
 /* ---------------------------------------------------------------- slots -- */
 // A card is navigation. It carries enough to tell one save from another --
 // who, where, how far -- and every control that writes to the file lives in
@@ -125,7 +149,7 @@ function slotCard(slot, index) {
       chip("i-level", "level " + slot.level),
       chip("i-clock", slot.playtime),
       chip("i-coin", slot.munny + " munny"));
-    if (slot.world) facts.append(chip("i-sparkle", slot.world));
+    if (slot.world) facts.append(chip("i-globe", slot.world));
     // A save that has not reached a named map yet would otherwise render an
     // empty pill with nothing but the pin in it.
     if (slot.location) facts.append(chip("i-pin", slot.location, "mono"));
@@ -625,11 +649,12 @@ function folderPanel(canBrowse, dirs) {
     // Render the masked path: this row sits beside the masked account chip,
     // and on Steam the directory is named by the account id, so showing the
     // raw path here would undo the chip. Copy and the API still use d.path.
-    row.append(icon(d.archive ? "i-archive" : "i-folder"), el("div", "p", d.displayPath || d.path));
+    row.append(icon(d.archive ? "i-archive" : platformIcon(d.platform)),
+      el("div", "p", d.displayPath || d.path));
 
     const tag = d.platform + (d.accountId ? " · " + d.accountId : "");
     if (d.archive) row.append(chip("i-archive", "zip", "hue archive"));
-    row.append(chip(d.cloud ? "i-cloud" : null, tag));
+    row.append(chip(d.cloud ? "i-cloud" : platformIcon(d.platform), tag));
 
     const acts = el("div", "acts");
     const copy = pill(null, "i-copy", "quiet round tiny");
@@ -721,7 +746,7 @@ function workspaceBar(slot) {
   // A save with no Steam wrapper carries no account id, so the form is shown
   // instead of an empty chip. The id itself arrives already masked.
   if (slot.account) bar.append(chip("i-shield", slot.account, "mono"));
-  else if (slot.format) bar.append(chip(null, slot.format));
+  if (slot.format) bar.append(chip(formatIcon(slot.format), slot.format));
   return bar;
 }
 

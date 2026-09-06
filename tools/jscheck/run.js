@@ -291,15 +291,36 @@ function ok(name, cond, extra) {
                        "Records", "Story"]) {
     ok("the dashboard draws the " + panel + " panel", shows(panel));
   }
+  // A covered panel still draws: the heading and the schema note are what say
+  // which region is under the cover, so neither may be hidden with it.
 
   // Values out of the fixture, so an empty panel cannot pass as a full one.
   ok("it reads the header", shows(detail.header.playtime) &&
     shows(String(detail.header.level)));
+
+  // The two panels that say what is ahead of the player come up covered, and
+  // the names they hold must genuinely not be in the document until asked
+  // for: a cover that only hides them with CSS would still leak into a
+  // screenshot, a find-in-page and a screen reader.
   const first = Object.keys(detail.characters)[0];
-  ok("it draws a character sheet", shows(first) &&
-    shows("HP " + detail.characters[first].hp));
-  ok("it names equipped gear",
-    shows(detail.characters[first].equipment.weapons["0"].name));
+  const gear = detail.characters[first].equipment.weapons["0"].name;
+  ok("the party is covered until it is asked for",
+    !shows("HP " + detail.characters[first].hp) && !shows(gear),
+    "a spoiler cover must not merely hide what it built");
+  ok("the cover says what it is covering", shows("Hidden to avoid spoilers"));
+
+  const reveal = [...board.walk()].filter(function (n) {
+    return n.classList.contains("pill") && n.textContent.indexOf("Show anyway") > -1;
+  });
+  ok("both spoiler panels offer a way through", reveal.length === 2,
+    "found " + reveal.length);
+  for (const b of reveal) b.onclick();
+
+  const open = board.textContent;
+  const showsNow = function (what) { return open.indexOf(what) > -1; };
+  ok("it draws a character sheet once revealed", showsNow(first) &&
+    showsNow("HP " + detail.characters[first].hp));
+  ok("it names equipped gear", showsNow(gear));
   ok("it counts what the save holds",
     shows(String(Object.keys(detail.materials).length)) || shows("held in total"));
 

@@ -591,13 +591,38 @@ footer .legal { margin-top:.4rem; opacity:.8; }
 .ovnote svg { width:13px; height:13px; flex:none; margin-top:.15rem; }
 .ovempty { margin:.2rem 0 0; color:var(--faint); font-size:.8rem; }
 
+/* ----- spoiler covers ----- */
+/* A panel that would say what is ahead of the player rather than behind them
+   comes up covered. The cover is quiet rather than alarming: this is a
+   courtesy, not a warning about anything dangerous. */
+.spoiler-cover {
+  display:flex; align-items:center; gap:.85rem;
+  padding:.9rem 1rem; border-radius:.7rem;
+  background:var(--glass); border:1px dashed var(--hair-hi);
+}
+.spoiler-cover .spoiler-ico {
+  width:2.2rem; height:2.2rem; border-radius:50%; flex:none;
+  display:grid; place-items:center;
+  background:var(--glass-lo); border:1px solid var(--hair);
+  color:var(--brass-lo);
+}
+.spoiler-cover .spoiler-ico svg { width:15px; height:15px; }
+.spoiler-cover b { display:block; font-weight:650; font-size:.86rem; }
+.spoiler-cover p { margin:.15rem 0 0; color:var(--dim); font-size:.78rem;
+  line-height:1.5; max-width:46ch; }
+.spoiler-cover .pill { margin-left:auto; flex:none; }
+/* Uncovering is not a decision anyone should have to hunt to undo. */
+.spoiler > .pill { margin-bottom:.6rem; }
+.spoiler-body { animation:rise .3s var(--out) both; }
+
 .tiles { display:grid; gap:.6rem;
   grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr)); }
 .tile { padding:.75rem .9rem; border-radius:.7rem;
   background:var(--glass); border:1px solid var(--hair);
   display:flex; flex-direction:column; gap:.25rem; }
 .tl { font-size:.68rem; letter-spacing:.08em; text-transform:uppercase;
-  color:var(--faint); }
+  color:var(--faint); display:flex; align-items:center; gap:.35rem; }
+.tl svg { width:11px; height:11px; flex:none; opacity:.8; }
 .tv { font:400 1.5rem/1.05 var(--serif); color:var(--text); }
 .ts { font-size:.7rem; color:var(--dim); }
 .ts.warn { color:var(--proud); }
@@ -639,10 +664,15 @@ footer .legal { margin-top:.4rem; opacity:.8; }
 /* ----- the labelled-row list the sheets and panels build out of ----- */
 .detail { display:flex; flex-direction:column; gap:.3rem; }
 .drow { display:flex; gap:.7rem; align-items:baseline; font-size:.8rem; line-height:1.6; }
+/* The mark sits with the label rather than in a column of its own: the labels
+   are right-aligned, so a separate column would leave a ragged gap between the
+   two whenever a label is short. */
 .dk {
-  flex:none; width:8.5rem; text-align:right; color:var(--faint);
+  flex:none; width:8.5rem; color:var(--faint);
   text-transform:lowercase; letter-spacing:.02em;
+  display:flex; align-items:center; justify-content:flex-end; gap:.35rem;
 }
+.dk svg { width:12px; height:12px; flex:none; opacity:.7; }
 .dv { color:var(--text); word-break:break-word; }
 
 /* ----- collapsible sections ----- */

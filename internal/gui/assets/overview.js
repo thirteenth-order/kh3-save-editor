@@ -20,7 +20,7 @@
 // modules because the server hands every asset out under a path that carries
 // the run's token, so a relative import inherits it; see assetPrefix in
 // server.go for why the query string could not do that job.
-import { chip, el, icon } from "./ui.js";
+import { chip, el, icon, pill } from "./ui.js";
 import { SCHEMA } from "./schema.js";
 
 /* ------------------------------------------------------------- schema -- */
@@ -56,9 +56,16 @@ function ovNote(sec) {
 
 /* -------------------------------------------------------------- pieces -- */
 
-function ovTile(label, value, sub) {
+function ovTileLabel(iconName, label) {
+  const n = el("div", "tl");
+  if (iconName) n.append(icon(iconName));
+  n.append(el("span", null, label));
+  return n;
+}
+
+function ovTile(iconName, label, value, sub) {
   const n = el("div", "tile");
-  n.append(el("div", "tl", label), el("div", "tv", String(value)));
+  n.append(ovTileLabel(iconName, label), el("div", "tv", String(value)));
   if (sub) n.append(el("div", "ts", sub));
   return n;
 }
@@ -66,12 +73,12 @@ function ovTile(label, value, sub) {
 // A meter is only ever drawn where the schema names a range the game actually
 // respects. Anything outside that range still renders: a save edited past the
 // soft cap is a real save, and clamping the bar would hide it.
-function ovMeter(label, value, f) {
+function ovMeter(iconName, label, value, f) {
   const n = el("div", "tile meter");
   const lo = f.softMin || 0;
   const hi = f.softMax;
   const at = Math.max(0, Math.min(1, (value - lo) / (hi - lo || 1)));
-  n.append(el("div", "tl", label), el("div", "tv", String(value)));
+  n.append(ovTileLabel(iconName, label), el("div", "tv", String(value)));
   const bar = el("div", "bar");
   const fill = el("i");
   fill.style.setProperty("width", (at * 100).toFixed(1) + "%");
@@ -106,6 +113,49 @@ function ovPanel(title, iconName, body, note) {
 
 function ovEmpty(text) { return el("p", "ovempty", text); }
 
+/* ------------------------------------------------------------ spoilers -- */
+// Some of what a save holds says what is *ahead* of the player, not only what
+// is behind them. A party sheet names the guest fighting beside Sora, and a
+// list of worlds names worlds. Somebody opening a save to change its
+// difficulty has not asked to be told who they are about to meet.
+//
+// So those panels come up covered, and the reader uncovers the ones they want.
+// The choice is remembered for as long as the page is open, because having to
+// re-confirm it on every tab switch would make it a nuisance rather than a
+// courtesy, and it is deliberately not remembered any longer than that: a
+// fresh run starts covered again.
+const REVEALED = new Set();
+
+function ovSpoiler(key, warning, build) {
+  const box = el("div", "spoiler");
+  const body = el("div", "spoiler-body");
+
+  const cover = el("div", "spoiler-cover");
+  const badge = el("div", "spoiler-ico");
+  badge.append(icon("i-eye-off"));
+  const copy = el("div");
+  copy.append(el("b", null, "Hidden to avoid spoilers"), el("p", null, warning));
+  const show = pill("Show anyway", "i-eye", "quiet");
+  cover.append(badge, copy, show);
+
+  const hide = pill("Hide", "i-eye-off", "quiet tiny");
+
+  let built = false;
+  function reveal(on) {
+    if (on && !built) { body.append(build()); built = true; }
+    cover.hidden = on;
+    body.hidden = !on;
+    hide.hidden = !on;
+    if (on) REVEALED.add(key); else REVEALED.delete(key);
+  }
+  show.onclick = function () { reveal(true); };
+  hide.onclick = function () { reveal(false); };
+
+  box.append(cover, hide, body);
+  reveal(REVEALED.has(key));
+  return box;
+}
+
 // Entries a save leaves at their empty value are dropped, so a fresh file does
 // not render six copies of "Empty".
 function ovLive(section, isSet) {
@@ -115,6 +165,14 @@ function ovLive(section, isSet) {
     if (isSet(ent)) out.push({ key: key, ent: ent });
   }
   return out;
+}
+
+// The left-hand label of a row in the detail list, with an optional mark.
+function ovKey(iconName, label) {
+  const n = el("span", "dk");
+  if (iconName) n.append(icon(iconName));
+  n.append(el("span", null, label));
+  return n;
 }
 
 function ovChips(rows, label) {
@@ -129,21 +187,21 @@ function ovWhere(doc) {
   const h = doc.header || {};
   const wrap = el("div", "detail");
   const rows = [
-    ["world", h.world_logo_name],
-    ["location", h.location_name],
-    ["map", h.map_path],
-    ["spawn", h.map_spawn],
-    ["save icon", h.save_icon_name],
-    ["player", h.player_script],
-    ["character", h.player_character],
-    ["written", h.saved_at],
+    ["i-globe", "world", h.world_logo_name],
+    ["i-pin", "location", h.location_name],
+    ["i-stack", "map", h.map_path],
+    ["i-pin", "spawn", h.map_spawn],
+    ["i-sparkle", "save icon", h.save_icon_name],
+    ["i-users", "player", h.player_script],
+    ["i-users", "character", h.player_character],
+    ["i-clock", "written", h.saved_at],
   ];
   let any = false;
   for (const r of rows) {
-    if (!r[1]) continue;
+    if (!r[2]) continue;
     any = true;
     const line = el("div", "drow");
-    line.append(el("span", "dk", r[0]), el("span", "dv", String(r[1])));
+    line.append(ovKey(r[0], r[1]), el("span", "dv", String(r[2])));
     wrap.append(line);
   }
   return any ? wrap : ovEmpty("This save has not reached a named map yet.");
@@ -157,36 +215,39 @@ function ovNumbers(doc) {
 
   const level = ovHeaderField("level");
   tiles.push(level && level.softMax
-    ? ovMeter("Level", h.level || 0, level)
-    : ovTile("Level", h.level || 0));
+    ? ovMeter("i-level", "Level", h.level || 0, level)
+    : ovTile("i-level", "Level", h.level || 0));
 
-  tiles.push(ovTile("Playtime", h.playtime || "0:00:00"));
+  tiles.push(ovTile("i-clock", "Playtime", h.playtime || "0:00:00"));
 
   // The ledger is three fields the format stores separately and Patch keeps
   // consistent, so showing the balance alone would hide the pair that has to
   // move with it.
-  tiles.push(ovTile("Munny", (h.munny || 0).toLocaleString(),
+  tiles.push(ovTile("i-coin", "Munny", (h.munny || 0).toLocaleString(),
     (h.munny_earned || h.munny_spent)
       ? (h.munny_earned || 0).toLocaleString() + " earned · " +
         (h.munny_spent || 0).toLocaleString() + " spent"
       : null));
 
-  tiles.push(ovTile("Total EXP", (h.total_exp || 0).toLocaleString()));
+  tiles.push(ovTile("i-sparkle", "Total EXP", (h.total_exp || 0).toLocaleString()));
 
   const crabs = ovHeaderField("crabs");
   tiles.push(crabs && crabs.softMax
-    ? ovMeter("Lucky emblems", h.crabs || 0, crabs)
-    : ovTile("Lucky emblems", h.crabs || 0));
+    ? ovMeter("i-gem", "Lucky emblems", h.crabs || 0, crabs)
+    : ovTile("i-gem", "Lucky emblems", h.crabs || 0));
 
-  tiles.push(ovTile("Enemies defeated", (h.enemies_defeated || 0).toLocaleString()));
-  tiles.push(ovTile("Times saved", h.saves_count || 0));
+  tiles.push(ovTile("i-sword", "Enemies defeated",
+    (h.enemies_defeated || 0).toLocaleString()));
+  tiles.push(ovTile("i-stack", "Times saved", h.saves_count || 0));
 
   const boosts = [];
   for (const b of [["HP", "bonus_hp"], ["MP", "bonus_mp"], ["Strength", "bonus_strength"],
                    ["Magic", "bonus_magic"], ["Defense", "bonus_defense"]]) {
     if (h[b[1]]) boosts.push(b[0] + " +" + h[b[1]]);
   }
-  if (boosts.length) tiles.push(ovTile("Bonuses", boosts.length, boosts.join(" · ")));
+  if (boosts.length) {
+    tiles.push(ovTile("i-level", "Bonuses", boosts.length, boosts.join(" · ")));
+  }
 
   return ovGrid(tiles);
 }
@@ -211,13 +272,13 @@ function ovAbilityCounts(ch) {
   return { owned: owned, equipped: equipped, worn: worn };
 }
 
-function ovKindRow(label, group) {
+function ovKindRow(iconName, label, group) {
   const keys = Object.keys(group || {}).sort(function (a, b) { return Number(a) - Number(b); });
   const worn = [];
   for (const k of keys) if (group[k]) worn.push(group[k]);
   if (!worn.length) return null;
   const row = el("div", "drow");
-  row.append(el("span", "dk", label));
+  row.append(ovKey(iconName, label));
   const val = el("span", "dv facts");
   for (const e of worn) {
     // An entry that the game has switched off is still equipped, and saying so
@@ -235,7 +296,7 @@ function ovSheet(name, ch) {
   const head = el("div", "sheet-head");
   head.append(el("b", null, name));
   const vitals = el("div", "facts");
-  vitals.append(chip("i-shield", "HP " + ch.hp), chip("i-sparkle", "MP " + ch.mp));
+  vitals.append(chip("i-heart", "HP " + ch.hp), chip("i-sparkle", "MP " + ch.mp));
   if (ch.focus) vitals.append(chip(null, "Focus " + ch.focus));
   head.append(el("div", "grow"), vitals);
   box.append(head);
@@ -246,23 +307,23 @@ function ovSheet(name, ch) {
   }
 
   const body = el("div", "detail");
-  const kinds = [["weapons", "weapons"], ["armor", "armor"],
-                 ["accessories", "accessories"], ["items", "items"]];
+  const kinds = [["weapons", "i-sword"], ["armor", "i-shield"],
+                 ["accessories", "i-ring"], ["items", "i-potion"]];
   for (const k of kinds) {
-    const row = ovKindRow(k[1], (ch.equipment || {})[k[0]]);
+    const row = ovKindRow(k[1], k[0], (ch.equipment || {})[k[0]]);
     if (row) body.append(row);
   }
 
   const ab = ovAbilityCounts(ch);
   if (ab.owned) {
     const row = el("div", "drow");
-    row.append(el("span", "dk", "abilities"),
+    row.append(ovKey("i-sparkle", "abilities"),
       el("span", "dv", ab.equipped + " equipped of " + ab.owned + " owned"));
     body.append(row);
   }
   if (boosts.length) {
     const row = el("div", "drow");
-    row.append(el("span", "dk", "boosts"), el("span", "dv", boosts.join(" · ")));
+    row.append(ovKey("i-level", "boosts"), el("span", "dv", boosts.join(" · ")));
     body.append(row);
   }
   if (ch.ai) {
@@ -272,7 +333,7 @@ function ovSheet(name, ch) {
     }
     if (bits.length) {
       const row = el("div", "drow");
-      row.append(el("span", "dk", "behavior"), el("span", "dv", bits.join(" · ")));
+      row.append(ovKey("i-users", "behavior"), el("span", "dv", bits.join(" · ")));
       body.append(row);
     }
   }
@@ -292,7 +353,7 @@ function ovParty(doc) {
   const standing = ovLive(doc.party, function (e) { return e.id !== 0; });
   if (standing.length) {
     const line = el("div", "drow");
-    line.append(el("span", "dk", "party"),
+    line.append(ovKey("i-users", "party"),
       el("span", "dv", standing.map(function (r) { return r.ent.name; }).join(", ")));
     const holder = el("div", "detail");
     holder.append(line);
@@ -309,9 +370,9 @@ function ovLoadout(doc) {
   const magic = ovLive(doc.magic, function (e) { return e.id !== 0; });
   const links = ovLive(doc.links, function (e) { return e.id !== 0; });
 
-  const put = function (label, rows) {
+  const put = function (iconName, label, rows) {
     const line = el("div", "drow");
-    line.append(el("span", "dk", label));
+    line.append(ovKey(iconName, label));
     if (!rows.length) {
       line.append(el("span", "dv dimmed", "none"));
     } else {
@@ -321,8 +382,8 @@ function ovLoadout(doc) {
     }
     wrap.append(line);
   };
-  put("magic", magic);
-  put("links", links);
+  put("i-wand", "magic", magic);
+  put("i-link", "links", links);
 
   // Shortcuts read empty in every save this build was mapped from, and the
   // reason is in the schema note rather than in a guess made here: the game
@@ -336,7 +397,7 @@ function ovLoadout(doc) {
     }
   }
   const line = el("div", "drow");
-  line.append(el("span", "dk", "shortcuts"),
+  line.append(ovKey("i-slider", "shortcuts"),
     el("span", "dv" + (bound ? "" : " dimmed"),
       bound ? bound + " bound across " + Object.keys(pages).length + " pages"
             : "none bound by hand"));
@@ -361,9 +422,10 @@ function ovCollection(doc) {
   const keys = ovLive(doc.keychain_upgrades, function (e) { return e.value !== 0; });
 
   const tiles = [
-    ovTile("Items", inv.distinct, inv.total + " held in total"),
-    ovTile("Materials", mat.distinct, mat.total + " held in total"),
-    ovTile("Keychain upgrades", keys.length, keys.length ? null : "none recorded"),
+    ovTile("i-bag", "Items", inv.distinct, inv.total + " held in total"),
+    ovTile("i-gem", "Materials", mat.distinct, mat.total + " held in total"),
+    ovTile("i-sword", "Keychain upgrades", keys.length,
+      keys.length ? null : "none recorded"),
   ];
   const wrap = el("div");
   wrap.append(ovGrid(tiles));
@@ -391,9 +453,9 @@ function ovRecords(doc) {
   const shots = ovLive(recs.shotlocks, function (e) { return e.uses > 0; });
 
   const rows = el("div", "detail");
-  const put = function (label, list) {
+  const put = function (iconName, label, list) {
     const line = el("div", "drow");
-    line.append(el("span", "dk", label));
+    line.append(ovKey(iconName, label));
     if (!list.length) {
       line.append(el("span", "dv dimmed", "never used"));
     } else {
@@ -406,8 +468,8 @@ function ovRecords(doc) {
     }
     rows.append(line);
   };
-  put("attractions", used);
-  put("shotlocks", shots);
+  put("i-sparkle", "attractions", used);
+  put("i-sword", "shotlocks", shots);
   wrap.append(rows);
 
   // Minigames and flans are upstream's names on offsets this build has never
@@ -489,14 +551,28 @@ export function overview(slot, doc) {
   const system = doc.characters && !Object.keys(doc.characters).length &&
     (!doc.header || doc.header.difficulty === undefined);
 
-  wrap.append(ovPanel("Where", "i-pin", ovWhere(doc)));
+  wrap.append(ovPanel("Where", "i-globe", ovWhere(doc)));
   if (!system) wrap.append(ovPanel("Numbers", "i-level", ovNumbers(doc)));
-  wrap.append(ovPanel("Party", "i-shield", ovParty(doc)));
-  wrap.append(ovPanel("Loadout", "i-sparkle", ovLoadout(doc),
+
+  // The two that say what is ahead rather than what is behind. A guest party
+  // member is somebody the player has met, but the sheet sits beside a name
+  // they may not have, and the story list names worlds.
+  wrap.append(ovPanel("Party", "i-users",
+    ovSpoiler("party",
+      "This names every character travelling with Sora in this save, including " +
+      "the guest who joins in the world it was saved in.",
+      function () { return ovParty(doc); })));
+
+  wrap.append(ovPanel("Loadout", "i-wand", ovLoadout(doc),
     ovNote(ovSub(ovSection("shortcuts"), "shortcuts") || ovSection("shortcuts"))));
-  wrap.append(ovPanel("Collection", "i-stack", ovCollection(doc)));
-  wrap.append(ovPanel("Records", "i-clock", ovRecords(doc), ovNote(ovSection("records"))));
-  wrap.append(ovPanel("Story", "i-play", ovStory(doc),
+  wrap.append(ovPanel("Collection", "i-gem", ovCollection(doc)));
+  wrap.append(ovPanel("Records", "i-trophy", ovRecords(doc), ovNote(ovSection("records"))));
+
+  wrap.append(ovPanel("Story", "i-book",
+    ovSpoiler("story",
+      "This names the worlds this save has reached, and the beats it has " +
+      "reached inside them.",
+      function () { return ovStory(doc); }),
     ovNote(ovSection("story_flags"))));
   return wrap;
 }
