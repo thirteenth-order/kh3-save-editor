@@ -62,15 +62,27 @@ CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/kh3save" "$ROOT/cmd/kh3save"
 DOCS_DIR="Documents"
 SAVE_DIR="$DOCS_DIR/KINGDOM HEARTS III/Steam/76561190000000000/SaveGames/kh3sv2/data"
 
+# A short fixture is 0x20000 bytes, which is a valid save and is what the
+# golden vectors were built on, and it stops long before the record block at
+# the tail. A scene that wants to show the tail asks for `fixture: full` and
+# gets saves the size of a real one -- 9.3 MB each, and still under a second to
+# build and zip, so the only reason not to make it the default is that the
+# short one is what the rest of the test suite uses.
 fixture() {
 	rm -rf "$WORK/home"
-	go run "$ROOT/tools/genfixture" -layout "$WORK/home" >/dev/null
+	case ${1:-short} in
+	full) go run "$ROOT/tools/genfixture" -layout -full "$WORK/home" >/dev/null ;;
+	*) go run "$ROOT/tools/genfixture" -layout "$WORK/home" >/dev/null ;;
+	esac
 
 	# A partial patch document, so the scene can cat it rather than type it.
+	# One key from three different regions, including the record block at the
+	# tail, which only a full-size save reaches -- the json scene asks for one.
 	cat >"$WORK/home/$SAVE_DIR/tweak.json" <<'JSON'
 {
-  "header": { "munny": 65535 },
-  "characters": { "Sora": { "hp": 99, "mp": 99 } }
+  "header": { "munny": 65535, "map_path": "/Game/Levels/ca/ca_01/ca_01" },
+  "characters": { "Sora": { "hp": 99, "mp": 99 } },
+  "records": { "attractions": { "0": { "high_score": 4200 } } }
 }
 JSON
 
@@ -84,6 +96,7 @@ JSON
 # whole directory tree inside them and needs the columns for it.
 geometry() { sed -n 's/.*geometry: \([0-9]*x[0-9]*\).*/\1/p' "$1" | head -1; }
 scene_cwd() { sed -n 's/.*cwd: \([a-z]*\).*/\1/p' "$1" | head -1; }
+scene_fixture() { sed -n 's/.*fixture: \([a-z]*\).*/\1/p' "$1" | head -1; }
 
 record() {
 	name=$1
@@ -101,7 +114,8 @@ record() {
 	*) cwd=$WORK/home/$SAVE_DIR ;;
 	esac
 
-	echo "==> $name  (${cols}x${rows})"
+	kind=$(scene_fixture "$scene")
+	echo "==> $name  (${cols}x${rows}${kind:+, $kind fixture})"
 	mkdir -p "$WORK/casts" "$OUT"
 
 	# Preflight. A line wider than the terminal wraps and a scene taller than it
@@ -109,7 +123,7 @@ record() {
 	# geometry -- by the time it shows up it is a GIF, not an error. So the
 	# scene runs once with the delays turned off and not attached to a terminal,
 	# where nothing wraps, and its real dimensions are measured.
-	fixture
+	fixture "$kind"
 	fit=$(env -i HOME="$WORK/home" PATH="$WORK/bin:/usr/bin:/bin" \
 		TERM=dumb LANG=C.UTF-8 TYPE_DELAY=0 BEAT=0 \
 		sh -c "cd \"$cwd\" && sh \"$scene\"" 2>&1 |
@@ -120,7 +134,7 @@ record() {
 	[ "$w" -le "$cols" ] || echo "    warning: widest line is $w, terminal is $cols -- it will wrap" >&2
 	[ "$h" -lt "$rows" ] || echo "    warning: $h lines in $rows rows -- it will scroll" >&2
 
-	fixture
+	fixture "$kind"
 
 	# env -i is the whole point: the scene starts from an empty environment and
 	# is handed back only what it cannot run without. TERM has to be something

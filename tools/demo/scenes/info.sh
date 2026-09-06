@@ -1,5 +1,5 @@
 #!/bin/sh
-# Read a save folder without touching it. geometry: 84x27 cwd: data
+# Read a save folder without touching it. geometry: 84x34 cwd: data
 set -u
 . "$(dirname "$0")/../lib.sh"
 

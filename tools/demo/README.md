@@ -58,13 +58,20 @@ hold 1.2
 `run` types a command out and then runs it; `say` types a `#` comment without
 running anything; `hold` leaves the last frame up before the loop comes round.
 
-Two settings live in the header comment, because they differ per scene:
+Three settings live in the header comment, because they differ per scene:
 
 | | |
 | :-- | :-- |
 | `geometry: WxH` | terminal size, in characters |
 | `cwd: data` | start in the save directory (the default) |
 | `cwd: documents` | start one level above `KINGDOM HEARTS III`, for the archive scene |
+| `fixture: full` | saves the size of a real one, 9.3 MB each |
+
+The default fixture is `0x20000` bytes. That is a structurally valid save and
+it is what the golden vectors were built on, but it stops long before the
+record block at the tail, so a scene that wants to show minigame bests, the
+Flantastic Seven or the album limit asks for `fixture: full`. It costs about a
+second per scene and nothing else.
 
 Getting the geometry wrong is easy and shows up only as a wrapped line or a
 scrolled frame in a finished GIF, so `record.sh` measures each scene first --

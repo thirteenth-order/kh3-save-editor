@@ -2,7 +2,7 @@
 # A .zip backup works anywhere a save folder does, unpacked or not.
 # The saves inside are addressed <archive>!<member>, the way jar: URLs do it,
 # which is also what keeps the account id visible in the path.
-# geometry: 92x28 cwd: documents
+# geometry: 92x35 cwd: documents
 set -u
 . "$(dirname "$0")/../lib.sh"
 DEMO_CWD='…/Documents'

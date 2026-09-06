@@ -1,6 +1,8 @@
 #!/bin/sh
-# Fields the interface does not expose, through dump and patch.
-# geometry: 84x20 cwd: data
+# The whole editing surface: dump renders it, patch takes back the keys you
+# changed. One key each from the header, a character and the record block at
+# the tail, which is why this one wants a full-size save.
+# geometry: 88x26 cwd: data fixture: full
 set -u
 . "$(dirname "$0")/../lib.sh"
 
