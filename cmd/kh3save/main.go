@@ -185,6 +185,19 @@ type loaded struct {
 	format  kh3.Format
 }
 
+// show masks any account id inside a path before a human reads it.
+//
+// On Steam the save lives under a directory named after the SteamID64, so
+// printing the path a command was given publishes the id, and the key derives
+// from the id alone. Gating the `account` line behind -with-account while the
+// path above it spells the id out in full accomplishes nothing, which is
+// exactly what this output used to do.
+//
+// Mask on the way out and only there. Every read, write and key derivation
+// uses the real path; this is for the copy that lands in a terminal, a
+// screenshot or a pasted bug report.
+func show(p string) string { return kh3.MaskPath(p) }
+
 func load(path, account string) (*loaded, error) {
 	blob, err := kh3.ReadFile(path)
 	if err != nil {
@@ -202,11 +215,11 @@ func load(path, account string) (*loaded, error) {
 	} else if account != "" {
 		return nil, fmt.Errorf("%s is not encrypted, so -account means nothing here; "+
 			"use `kh3save convert -to pc -account %s` to give it one",
-			kh3.MaskPath(path), account)
+			show(path), account)
 	}
 	plain, _, err := kh3.Open(blob, key)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
+		return nil, fmt.Errorf("%s: %w", show(path), err)
 	}
 	return &loaded{path, blob, acct, key, plain, format}, nil
 }
@@ -219,12 +232,12 @@ func commit(l *loaded, newPlain []byte, outDir string, dry bool) error {
 	}
 	check, _, err := kh3.Open(blob, l.key) // revalidates every integrity field
 	if err != nil {
-		return fmt.Errorf("refusing to write %s: %w", l.path, err)
+		return fmt.Errorf("refusing to write %s: %w", show(l.path), err)
 	}
 	// Wrap rewrites the CRC at 0x0C, so compare around it.
 	if string(check[:0x0C]) != string(newPlain[:0x0C]) ||
 		string(check[0x10:]) != string(newPlain[0x10:]) {
-		return fmt.Errorf("refusing to write %s: self-check failed", l.path)
+		return fmt.Errorf("refusing to write %s: self-check failed", show(l.path))
 	}
 	if dry {
 		fmt.Println("  (dry run, nothing written)")
@@ -243,12 +256,12 @@ func commit(l *loaded, newPlain []byte, outDir string, dry bool) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println("  backup ->", b)
+		fmt.Println("  backup ->", show(b))
 	}
 	if err := kh3.WriteFile(dst, blob, 0o644); err != nil {
 		return err
 	}
-	fmt.Println("  wrote", dst)
+	fmt.Println("  wrote", show(dst))
 	return nil
 }
 
@@ -299,7 +312,7 @@ func cmdInfo(args []string) error {
 			return err
 		}
 		h := kh3.ReadHeader(l.plain)
-		fmt.Printf("\n%s\n", p)
+		fmt.Printf("\n%s\n", show(p))
 		if l.format == kh3.FormatPlain {
 			fmt.Println("  container    plain (no Steam wrapper, no account id)")
 		}
@@ -522,10 +535,10 @@ func cmdVerify(args []string) error {
 	for _, p := range paths {
 		if _, err := load(p, account); err != nil {
 			bad++
-			fmt.Printf("FAIL  %s\n        %v\n", p, err)
+			fmt.Printf("FAIL  %s\n        %v\n", show(p), err)
 			continue
 		}
-		fmt.Printf("OK    %s\n", p)
+		fmt.Printf("OK    %s\n", show(p))
 	}
 	if bad > 0 {
 		return fmt.Errorf("%d file(s) failed", bad)
@@ -586,14 +599,14 @@ func cmdSwap(args []string) error {
 			return err
 		}
 		if !kh3.IsSlot(l.plain) {
-			fmt.Printf("skip  %s  (system file, no difficulty field)\n", p)
+			fmt.Printf("skip  %s  (system file, no difficulty field)\n", show(p))
 			continue
 		}
 		// Already on the target difficulty is usually nothing to do, but the
 		// start-item flags can still have work: a Critical save missing the
 		// earring it should have started with.
 		if kh3.GetDifficulty(l.plain) == target && !opt.GrantStartItems {
-			fmt.Printf("skip  %s  already %s\n", p, kh3.Difficulties[target])
+			fmt.Printf("skip  %s  already %s\n", show(p), kh3.Difficulties[target])
 			continue
 		}
 		newPlain, changes, err := kh3.SwapDifficulty(l.plain, target, opt)
@@ -601,10 +614,10 @@ func cmdSwap(args []string) error {
 			return err
 		}
 		if len(changes) == 0 {
-			fmt.Printf("skip  %s  nothing to change\n", p)
+			fmt.Printf("skip  %s  nothing to change\n", show(p))
 			continue
 		}
-		fmt.Printf("\n%s\n", p)
+		fmt.Printf("\n%s\n", show(p))
 		for _, c := range changes {
 			if strings.HasPrefix(c, " ") {
 				fmt.Println(c)
@@ -639,7 +652,7 @@ func cmdAbilities(args []string) error {
 		if !kh3.IsSlot(l.plain) {
 			continue
 		}
-		fmt.Printf("\n%s   difficulty %s\n", p, kh3.Difficulties[kh3.GetDifficulty(l.plain)])
+		fmt.Printf("\n%s   difficulty %s\n", show(p), kh3.Difficulties[kh3.GetDifficulty(l.plain)])
 		n := 3
 		if *all {
 			n = len(kh3.CharNames)
@@ -698,9 +711,9 @@ func cmdDecrypt(args []string) error {
 			return err
 		}
 		if *withAccount {
-			fmt.Printf("%s  ->  %s  (%d bytes, account %s)\n", p, dst, len(l.plain), l.account)
+			fmt.Printf("%s  ->  %s  (%d bytes, account %s)\n", show(p), show(dst), len(l.plain), l.account)
 		} else {
-			fmt.Printf("%s  ->  %s  (%d bytes)\n", p, dst, len(l.plain))
+			fmt.Printf("%s  ->  %s  (%d bytes)\n", show(p), show(dst), len(l.plain))
 		}
 	}
 	return nil
@@ -740,7 +753,7 @@ func cmdEncrypt(args []string) error {
 		if err := os.WriteFile(dst, blob, 0o644); err != nil {
 			return err
 		}
-		fmt.Printf("%s  ->  %s  (%d bytes)\n", p, dst, len(blob))
+		fmt.Printf("%s  ->  %s  (%d bytes)\n", show(p), show(dst), len(blob))
 	}
 	return nil
 }
@@ -810,7 +823,7 @@ func cmdConvert(args []string) error {
 
 		plain, _, err := kh3.Open(blob, readKey)
 		if err != nil {
-			return fmt.Errorf("%s: %w", p, err)
+			return fmt.Errorf("%s: %w", show(p), err)
 		}
 		// A save that never went through AES need not be block aligned, and
 		// encrypting one that is not would drop its last partial block. Going
@@ -830,14 +843,14 @@ func cmdConvert(args []string) error {
 		// Same self-check every write path here does: read our own output back
 		// the way the consumer will, and refuse to write if it does not hold.
 		if _, _, err := kh3.Open(out, writeKey); err != nil {
-			return fmt.Errorf("refusing to write %s: %w", p, err)
+			return fmt.Errorf("refusing to write %s: %w", show(p), err)
 		}
 
 		dst := filepath.Join(outDir, kh3.Base(p))
 		if err := os.WriteFile(dst, out, 0o644); err != nil {
 			return err
 		}
-		fmt.Printf("%s  ->  %s  (%s -> %s, %d bytes)\n", p, dst, have, want, len(out))
+		fmt.Printf("%s  ->  %s  (%s -> %s, %d bytes)\n", show(p), show(dst), have, want, len(out))
 	}
 	return nil
 }
@@ -876,16 +889,16 @@ func cmdRekey(args []string) error {
 			return err
 		}
 		if _, err := kh3.Unwrap(blob, dstKey); err != nil {
-			return fmt.Errorf("refusing to write %s: rekey self-check failed", p)
+			return fmt.Errorf("refusing to write %s: rekey self-check failed", show(p))
 		}
 		dst := filepath.Join(outDir, kh3.Base(p))
 		if err := os.WriteFile(dst, blob, 0o644); err != nil {
 			return err
 		}
 		if *withAccount {
-			fmt.Printf("%s  %s -> %s  ->  %s\n", p, l.account, to, dst)
+			fmt.Printf("%s  %s -> %s  ->  %s\n", show(p), l.account, to, show(dst))
 		} else {
-			fmt.Printf("%s  ->  %s\n", p, dst)
+			fmt.Printf("%s  ->  %s\n", show(p), show(dst))
 		}
 	}
 	return nil
@@ -944,12 +957,12 @@ func cmdGrantAbilities(args []string) error {
 			return err
 		}
 		if !kh3.IsSlot(l.plain) {
-			fmt.Printf("skip  %s  (system file)\n", p)
+			fmt.Printf("skip  %s  (system file)\n", show(p))
 			continue
 		}
 		buf := append([]byte(nil), l.plain...)
 		touched := false
-		fmt.Printf("\n%s\n", p)
+		fmt.Printf("\n%s\n", show(p))
 		for _, aid := range want {
 			cur := kh3.GetAbility(buf, ci, aid)
 			name := kh3.Abilities[aid]
@@ -1026,7 +1039,7 @@ func cmdDump(args []string) error {
 		if err := os.WriteFile(out, append(data, '\n'), 0o644); err != nil {
 			return err
 		}
-		fmt.Printf("%s  ->  %s\n", p, out)
+		fmt.Printf("%s  ->  %s\n", show(p), show(out))
 	}
 	return nil
 }
@@ -1060,7 +1073,7 @@ func cmdPatch(args []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("\n%s\n", p)
+		fmt.Printf("\n%s\n", show(p))
 		if len(changes) == 0 {
 			fmt.Println("  no changes")
 			continue
