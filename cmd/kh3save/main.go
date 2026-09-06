@@ -45,13 +45,17 @@ run. -addr (or $KH3_ADDR) overrides that and is meant for containers only.
 
 A save with no Steam wrapper -- what a console save tool hands back, and what
 decrypt writes -- is read and written by every command above with no account
-id at all. convert moves a save between the two forms.
+id at all. convert moves a save between the two forms, and -to plain writes
+the length a console slot actually is, which decrypt does not.
 
-The account id is auto-detected from the save path. Override with -account
-or $KH3_ACCOUNT. In-place edits are backed up to <file>.bak.<timestamp>;
-editing a save inside an archive rewrites the archive, so the backup is of the
-whole .zip and is named <archive>.bak.<timestamp>.zip. The game cannot read a
-zip, so unpack it before playing.
+The account id is auto-detected from the save path, and the Epic Games Store
+build is keyed to the constant 1638 rather than to a per-user id, so its saves
+need no account plumbing either. Override with -account or $KH3_ACCOUNT.
+
+In-place edits are backed up to <file>.bak.<timestamp>; editing a save inside
+an archive rewrites the archive, so the backup is of the whole .zip and is
+named <archive>.bak.<timestamp>.zip. The game cannot read a zip, so unpack it
+before playing.
 `
 
 // parseCommand splits a command line into a subcommand and its arguments.
@@ -268,7 +272,7 @@ func parseArgs(f *flag.FlagSet, args []string) ([]string, error) {
 
 func fs(name string, account *string) *flag.FlagSet {
 	f := flag.NewFlagSet(name, flag.ExitOnError)
-	f.StringVar(account, "account", "", "SteamID64 (auto-detected by default)")
+	f.StringVar(account, "account", "", "SteamID64, or "+kh3.EpicAccount+" for Epic (auto-detected by default)")
 	return f
 }
 
@@ -805,9 +809,14 @@ func cmdConvert(args []string) error {
 			return fmt.Errorf("%s: %w", p, err)
 		}
 		// A save that never went through AES need not be block aligned, and
-		// encrypting one that is not would drop its last partial block.
+		// encrypting one that is not would drop its last partial block. Going
+		// the other way, drop that alignment again: a console slot is exactly
+		// 0x10+filesize, and the console-side tools rebuild the CRC to
+		// end-of-file, so a tail they did not expect becomes a bad checksum.
 		if want.NeedsKey() {
 			plain = kh3.PadToBlock(plain)
+		} else {
+			plain = kh3.TrimToFileSize(plain)
 		}
 
 		out, err := kh3.Seal(plain, want, writeKey)

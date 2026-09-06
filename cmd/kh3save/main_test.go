@@ -2,13 +2,17 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
+	"hash/crc32"
 	"io"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/thirteenth-order/kh3-save-editor/internal/fixture"
 	"github.com/thirteenth-order/kh3-save-editor/internal/kh3"
 )
 
@@ -122,4 +126,70 @@ func captureStdout(t *testing.T, run func()) string {
 	w.Close()
 	os.Stdout = old
 	return <-done
+}
+
+// convert -to plain is the bridge to a console, so its output has to be the
+// length a console slot actually is. A save out of a Steam container carries
+// eight bytes of AES alignment past 0x10+filesize, and the console-side tools
+// (hzhreal/HTOS for the PS4 title ids, bucanero's Apollo patch) rebuild the
+// CRC to end-of-file, so those eight bytes become a checksum the game
+// rejects.
+func TestConvertToPlainWritesTheConsoleLength(t *testing.T) {
+	dir := t.TempDir()
+	key, err := kh3.DeriveKey(fixture.Account)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blob, err := kh3.Wrap(fixture.BuildFull(fixture.Default()), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(dir, "KHIII_slot0.bin")
+	if err := os.WriteFile(src, blob, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out := filepath.Join(dir, "plain")
+	captureStdout(t, func() {
+		if err := cmdConvert([]string{src, "-to", "plain", "-account", fixture.Account, "-o", out}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	got, err := os.ReadFile(filepath.Join(out, "KHIII_slot0.bin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := 0x10 + fixture.FullFileSize; len(got) != want {
+		t.Fatalf("converted to %d bytes, want 0x10+filesize = %d", len(got), want)
+	}
+	stored := binary.LittleEndian.Uint32(got[0x0C:])
+	if crc := crc32.ChecksumIEEE(got[0x10:]); crc != stored {
+		t.Errorf("CRC to end-of-file is 0x%08X, stored is 0x%08X", crc, stored)
+	}
+
+	// And the trip back: a console save is not block aligned, so converting it
+	// to the PC form has to pad it before encrypting or the last partial block
+	// is dropped.
+	back := filepath.Join(dir, "pc")
+	captureStdout(t, func() {
+		if err := cmdConvert([]string{filepath.Join(out, "KHIII_slot0.bin"),
+			"-to", "pc", "-account", fixture.Account, "-o", back}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	rewrapped, err := os.ReadFile(filepath.Join(back, "KHIII_slot0.bin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, form, err := kh3.Open(rewrapped, key)
+	if err != nil {
+		t.Fatalf("the re-wrapped save does not open: %v", err)
+	}
+	if form != kh3.FormatSteam {
+		t.Errorf("re-wrapped save read back as %s", form)
+	}
+	if !kh3.IsSlot(plain) {
+		t.Error("the round trip did not survive as a slot")
+	}
 }

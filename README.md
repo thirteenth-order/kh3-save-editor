@@ -253,8 +253,9 @@ opening a browser. `-json` gives the whole thing, enum tables included, and
 
 <img src="docs/demo-schema.gif" alt="kh3save schema -tables listing every enum table the save format uses and how many ids each holds, from Abilities at 512 down to AiAbilityUse at 3" width="720">
 
-The account id is detected from the save path. Override it with `-account` or
-`$KH3_ACCOUNT`. In-place edits are always backed up first.
+The account id is detected from the save path, and an Epic Games Store save
+needs no id of its own (see [Key derivation](#key-derivation)). Override it
+with `-account` or `$KH3_ACCOUNT`. In-place edits are always backed up first.
 
 ### Saves that are not Steam-encrypted
 
@@ -275,6 +276,14 @@ The round trip is byte-exact: strip the wrapper and put it back on and you get
 the file you started with. Note that a console's own savedata container is a
 separate layer this tool does not open or re-sign; `convert` deals with the
 file *inside* it.
+
+`-to plain` writes the length a console slot actually is, `0x10 + filesize`,
+which is 9,762,024 bytes rather than the 9,762,032 that come out of a Steam
+container. The difference is AES alignment the game never reads, and it matters
+only on the way to a console: the tools that resign a PS4 save rebuild the CRC
+over `0x10` to *end of file* rather than to `0x10 + filesize`, which agrees
+with the game only when there is no tail. `decrypt` does not trim, because its
+job is to show the plaintext of the file it was given.
 
 <img src="docs/demo-convert.gif" alt="kh3save convert stripping the Steam wrapper off a save, info reporting the result as a plain container with no account id, convert putting the wrapper back on, and cmp finding the result identical to the original byte for byte" width="720">
 
@@ -477,8 +486,29 @@ for i in range(32):
     j += 1
 ```
 
-Because the key is per-account, a save is bound to the account that wrote it.
-`kh3save rekey` moves one between accounts.
+Because the key is per-account, a Steam save is bound to the account that wrote
+it. `kh3save rekey` moves one between accounts.
+
+**The Epic Games Store build uses the same container and a constant id.** Its
+saves live under `KINGDOM HEARTS III/Epic Games Store/1638/SaveGames/`, and
+`1638` is not a per-user value: it is the same on every install, so every Epic
+save in the world is encrypted under the same key. Nothing has to be configured
+for one, and nothing about it identifies anybody, which is why it is the only
+account id this tool prints unmasked. It is tried last when a save is opened,
+so a Steam save is never mistaken for an Epic one.
+
+This was confirmed against saves shared by two unrelated people, which both
+decrypt and pass both integrity fields under it and fail under every other
+candidate; `kikeprime/KH-Save-Editor` hardcodes the same value as its default
+account, which is where the number was first written down.
+
+**PlayStation saves have no AES layer at all.** Once the console's own savedata
+container is open, a KH3 slot is the bare structure carrying only the CRC32 at
+`0x0C`, which is exactly the plain form above. Two console toolchains say so
+independently: `hzhreal/HTOS` registers CUSA11060/12025/12031/15072 and its
+entire write step is that one CRC, with no decrypt half; `bucanero/apollo-patches`
+patches `0x24`, `0x28` and `0x2C` as raw offsets and finishes the same way.
+No PS4 sample has been round-tripped through a real console yet.
 
 <details>
 <summary><b>Plaintext header, format version 5.2</b></summary>

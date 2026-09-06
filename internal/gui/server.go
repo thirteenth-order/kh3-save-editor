@@ -354,7 +354,11 @@ func describeDir(p string) kh3.SaveDir {
 	}
 	d := kh3.SaveDir{Path: p, Platform: "added", AccountID: ""}
 	acct := filepath.Dir(filepath.Dir(filepath.Dir(p)))
-	if base := filepath.Base(acct); base != "." && base != string(filepath.Separator) {
+	// Only take it as an account id if it looks like one. openSave passes this
+	// to ResolveAccount as an assertion, not a guess, so a directory that is
+	// merely in that position, such as "Epic Games Store" in the layout with
+	// no account level, would hard-fail a file the auto-detection reads fine.
+	if base := filepath.Base(acct); kh3.IsAccountID(base) {
 		d.AccountID = base
 		if plat := filepath.Base(filepath.Dir(acct)); plat != "." {
 			d.Platform = plat

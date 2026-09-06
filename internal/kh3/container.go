@@ -122,3 +122,29 @@ func PadToBlock(plain []byte) []byte {
 	copy(out, plain)
 	return out
 }
+
+// TrimToFileSize returns plain cut back to 0x10 plus the filesize field, which
+// is the length a console writes and the inverse of PadToBlock. A real slot is
+// 0x94F4E8 bytes there; the same save out of a Steam container is 0x94F4F0,
+// carrying eight bytes of AES alignment the game never reads.
+//
+// Those eight bytes matter on the way to a console. The console-side tools
+// rebuild the CRC over 0x10 to end-of-file rather than to 0x10+filesize
+// (hzhreal/HTOS does it for CUSA11060/12025/12031/15072, and bucanero's Apollo
+// patch for CUSA12031 does the same), which agrees with the game only when
+// there is no tail. Hand one of them a padded file and it writes a CRC the
+// game rejects.
+//
+// A save that is already the console length, or one whose filesize field does
+// not describe it, is returned untouched: this trims, it never grows and it
+// never guesses.
+func TrimToFileSize(plain []byte) []byte {
+	if len(plain) < 0x20 {
+		return plain
+	}
+	end := 0x10 + int(fileSize(plain))
+	if end < 0x20 || end > len(plain) {
+		return plain
+	}
+	return plain[:end]
+}

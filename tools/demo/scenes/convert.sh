@@ -5,6 +5,7 @@
 set -u
 . "$(dirname "$0")/../lib.sh"
 
+say "-to plain writes filesize + 0x10, the length a console slot is"
 run "kh3save convert KHIII_slot0.bin -to plain -o plain/"
 say "no wrapper, so no account id is involved at all"
 run "kh3save info plain/KHIII_slot0.bin"

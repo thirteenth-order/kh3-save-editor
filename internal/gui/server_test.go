@@ -1026,3 +1026,29 @@ func TestSchemaEndpointNeedsTheToken(t *testing.T) {
 		t.Fatalf("code %d, want 403", w.Code)
 	}
 }
+
+// openSave hands the hint to ResolveAccount as an assertion, so describeDir
+// must only produce one when the directory in that position really is an
+// account id. An Epic save unpacked with no account level puts the platform
+// name there, and asserting that as the account fails a file the
+// auto-detection reads without any help at all.
+func TestAddedFolderOnlyClaimsAnAccountThatLooksLikeOne(t *testing.T) {
+	cases := []struct {
+		dir     string
+		account string
+	}{
+		{filepath.Join("KINGDOM HEARTS III", "Steam", "76561190000000000",
+			"SaveGames", "kh3sv2", "data"), "76561190000000000"},
+		{filepath.Join("KINGDOM HEARTS III", "Epic Games Store", kh3.EpicAccount,
+			"SaveGames", "kh3sv2", "data"), kh3.EpicAccount},
+		{filepath.Join("KINGDOM HEARTS III", "Epic Games Store",
+			"SaveGames", "kh3sv2", "data"), ""},
+		{filepath.Join("unpacked", "data"), ""},
+	}
+	for _, c := range cases {
+		p := filepath.Join(t.TempDir(), c.dir)
+		if got := describeDir(p).AccountID; got != c.account {
+			t.Errorf("describeDir(%q) account = %q, want %q", c.dir, got, c.account)
+		}
+	}
+}

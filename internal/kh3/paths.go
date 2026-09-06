@@ -12,11 +12,13 @@ import (
 // SaveDir is one discovered save folder, or one backup zip standing in for a
 // save folder.
 type SaveDir struct {
-	Path      string `json:"path"`
-	Platform  string `json:"platform"`  // Steam / Epic Games Store
-	AccountID string `json:"accountId"` // the numeric directory, usually a SteamID64
-	Cloud     bool   `json:"cloud"`     // a steam_autocloud.vdf sits alongside
-	Archive   bool   `json:"archive"`   // a .zip, not a directory on disk
+	Path     string `json:"path"`
+	Platform string `json:"platform"` // Steam / Epic Games Store
+	// AccountID is the numeric directory: a SteamID64 on Steam, the constant
+	// EpicAccount on Epic, and empty for a layout that has no such directory.
+	AccountID string `json:"accountId"`
+	Cloud     bool   `json:"cloud"`   // a steam_autocloud.vdf sits alongside
+	Archive   bool   `json:"archive"` // a .zip, not a directory on disk
 }
 
 // saveRoots returns the directories that can contain a
@@ -66,27 +68,46 @@ func findSaveDirsIn(roots []string) []SaveDir {
 	var out []SaveDir
 	seen := map[string]bool{}
 	for _, root := range roots {
-		// <root>/KINGDOM HEARTS III/<platform>/<accountid>/SaveGames/kh3sv2/data
-		matches, _ := filepath.Glob(filepath.Join(root, "KINGDOM HEARTS III", "*", "*", "SaveGames", "kh3sv2", "data"))
-		for _, m := range matches {
-			abs, err := filepath.Abs(m)
-			if err != nil || seen[abs] {
-				continue
-			}
-			if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
-				continue
-			}
-			seen[abs] = true
+		base := filepath.Join(root, "KINGDOM HEARTS III")
+		for _, layout := range []struct {
+			glob       string
+			hasAccount bool
+		}{
+			// Steam, and Epic as the game writes it: a directory named after
+			// the account id. Epic's is the constant EpicAccount rather than a
+			// per-user value, but it sits in the same place.
+			{filepath.Join(base, "*", "*", "SaveGames", "kh3sv2", "data"), true},
+			// No account level. Shared Epic saves unpack to this shape, so
+			// someone who dropped one into Documents has it on disk whether or
+			// not the game itself ever writes it that way.
+			{filepath.Join(base, "*", "SaveGames", "kh3sv2", "data"), false},
+		} {
+			matches, _ := filepath.Glob(layout.glob)
+			for _, m := range matches {
+				abs, err := filepath.Abs(m)
+				if err != nil || seen[abs] {
+					continue
+				}
+				if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
+					continue
+				}
+				seen[abs] = true
 
-			account := filepath.Base(filepath.Dir(filepath.Dir(filepath.Dir(abs))))
-			platform := filepath.Base(filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(abs)))))
-			// steam_autocloud.vdf sits beside SaveGames, two levels up.
-			cloudPath := filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(abs))), "steam_autocloud.vdf")
-			_, cloudErr := os.Stat(cloudPath)
+				// .../<owner>/SaveGames/kh3sv2/data. owner is the account
+				// directory when the layout has one and the platform when it
+				// does not. steam_autocloud.vdf sits beside SaveGames either
+				// way, so it is always beside owner.
+				owner := filepath.Dir(filepath.Dir(filepath.Dir(abs)))
+				account, platform := "", filepath.Base(owner)
+				if layout.hasAccount {
+					account, platform = platform, filepath.Base(filepath.Dir(owner))
+				}
+				_, cloudErr := os.Stat(filepath.Join(owner, "steam_autocloud.vdf"))
 
-			out = append(out, SaveDir{
-				Path: abs, Platform: platform, AccountID: account, Cloud: cloudErr == nil,
-			})
+				out = append(out, SaveDir{
+					Path: abs, Platform: platform, AccountID: account, Cloud: cloudErr == nil,
+				})
+			}
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
