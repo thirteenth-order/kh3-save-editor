@@ -290,7 +290,12 @@ func headerSchema() []Field {
 		intF("playtime_seconds", "Playtime", "0x20", u32Min, u32Max),
 		intF("total_exp", "Total EXP", "0x24", u32Min, u32Max),
 		intF("munny", "Munny", "0x28", u32Min, u32Max).
-			soft(0, 9999999, "the game caps munny at 9,999,999"),
+			soft(0, 9999999, "the game caps munny at 9,999,999").
+			with("a balance: munny_earned minus munny_spent. Patch keeps the three consistent, so moving this moves munny_earned with it"),
+		intF("munny_earned", "Munny earned", hexOff(MunnyEarnedOff), u32Min, u32Max).
+			with("munny earned to date. No soft cap: the running total outlives any one balance"),
+		intF("munny_spent", "Munny spent", hexOff(MunnySpentOff), u32Min, u32Max).
+			with("munny spent to date. Moving this moves munny, not munny_earned: what was spent is history"),
 		intF("level", "Level", "0x2C", u8Min, u8Max).
 			soft(1, 99, "the game stops at level 99"),
 		enumF("desire_choice", "Desire", "DesireChoices", "0x30"),

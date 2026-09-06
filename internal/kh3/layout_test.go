@@ -198,13 +198,16 @@ func TestReadOnlyHeaderRejectsOnlyRealChanges(t *testing.T) {
 	p := buildPlain(1)
 	h := ReadHeader(p)
 
-	same := fmt.Sprintf(`{"header":{"checksum_crc32":%d,"munny":7}}`, h.Checksum)
+	// total_exp rather than munny: munny is one of the three fields Patch keeps
+	// consistent with each other, so writing it reports two changes and this
+	// test is about read-only handling, not about the ledger.
+	same := fmt.Sprintf(`{"header":{"checksum_crc32":%d,"total_exp":7}}`, h.Checksum)
 	out, changes, err := Patch(p, []byte(same))
 	if err != nil {
 		t.Fatalf("unchanged read-only field rejected: %v", err)
 	}
 	if len(changes) != 1 {
-		t.Errorf("changes = %v, want only the munny write", changes)
+		t.Errorf("changes = %v, want only the total_exp write", changes)
 	}
 	if got := ReadHeader(out).Checksum; got != h.Checksum {
 		t.Errorf("checksum moved to %d", got)

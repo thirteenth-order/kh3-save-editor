@@ -19,6 +19,8 @@ type Header struct {
 	PlaytimeSeconds uint32
 	TotalExp        uint32
 	Munny           uint32
+	MunnyEarned     uint32
+	MunnySpent      uint32
 	Level           byte
 	Location        byte
 	SaveIcon        byte
@@ -79,6 +81,8 @@ func ReadHeader(p []byte) Header {
 	h.EnemiesDefeated = binary.LittleEndian.Uint32(p[0x70:])
 	h.SavesCount = binary.LittleEndian.Uint16(p[0x5B8:])
 	h.SavedAtTicks = int64(binary.LittleEndian.Uint64(p[SavedAtOff:]))
+	h.MunnyEarned = binary.LittleEndian.Uint32(p[MunnyEarnedOff:])
+	h.MunnySpent = binary.LittleEndian.Uint32(p[MunnySpentOff:])
 	h.BonusHP = int32(binary.LittleEndian.Uint32(p[0xB49C:]))
 	h.BonusMP = int32(binary.LittleEndian.Uint32(p[0xB4A0:]))
 	h.BonusStrength = int32(binary.LittleEndian.Uint32(p[0xB4A4:]))

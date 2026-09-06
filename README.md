@@ -534,6 +534,7 @@ No PS4 sample has been round-tripped through a real console yet.
 | 0x5B8 | u16 | saves count |
 | 0x696 | u16 x5 | attraction use counters |
 | 0x6D0 | u16 x30 | shotlock use counters |
+| 0x840 / 0x844 | u32 | munny earned / spent; earned - spent is the munny at 0x28 |
 | 0x8F4 | 0x400 x 2 | inventory: count, flags |
 | 0x165E | u16 x100 | synthesis material counts |
 | 0x17EC | i32 | crabs collected |

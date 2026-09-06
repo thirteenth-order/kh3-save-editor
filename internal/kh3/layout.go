@@ -28,6 +28,21 @@ const (
 
 	CrabsOff = 0x17EC // i32, the 100 lucky emblems' cousin
 
+	// The munny ledger. Neither offset is upstream's; both were measured, and
+	// the measurement is an identity rather than a resemblance: across all five
+	// sample saves u32(0x840) - u32(0x844) equals the munny at 0x28 exactly.
+	//
+	//	earned  100  1177  1183  1895  1895
+	//	spent     0   600   600   600   600
+	//	munny   100   577   583  1295  1295
+	//
+	// So 0x28 is a balance and these two are the ledger it comes from. Whether
+	// the game recomputes 0x28 from the pair on load or merely cross-checks it
+	// is not known -- that needs the game -- which is exactly why Patch keeps
+	// all three consistent instead of writing 0x28 and hoping.
+	MunnyEarnedOff = 0x840 // u32, munny earned to date
+	MunnySpentOff  = 0x844 // u32, munny spent to date
+
 	StoryFlagOff   = 0xB4C4 // i32 per StoryFlags entry: a story-label number
 	StoryFlagCount = 80
 

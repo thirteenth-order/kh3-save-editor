@@ -64,6 +64,8 @@ var headerFields = []headerField{
 	{0x20, "u32", "playtime_seconds"},
 	{0x24, "u32", "total_exp"},
 	{0x28, "u32", "munny"},
+	{MunnyEarnedOff, "u32", "munny_earned"},
+	{MunnySpentOff, "u32", "munny_spent"},
 	{0x2C, "u8", "level"},
 	{0x30, "u8", "desire_choice"},
 	{0x31, "u8", "power_choice"},
@@ -485,6 +487,119 @@ func asInt(v any) (int64, error) {
 	return 0, fmt.Errorf("cannot read %v as an integer", v)
 }
 
+// The munny ledger is three fields holding two numbers' worth of information:
+// munny_earned - munny_spent == munny. A document that moves one of them and
+// leaves the others at their dumped values has asked for something arithmetic,
+// not something contradictory, so Patch works out which and writes it rather
+// than either refusing or letting the three drift apart.
+//
+// Which field gives way follows from what each one is. munny_spent is history
+// and nothing should rewrite it on somebody's behalf; munny is a balance, so it
+// absorbs any change to the ledger; munny_earned absorbs a change to the
+// balance, which is what "set my munny to 9999999" means. That leaves exactly
+// one rule: recompute the field the document left alone, and when it left two
+// alone, recompute the one on the other side of the identity.
+//
+// A document that moves all three is taken at its word if it balances and
+// rejected if it does not, because there is no third number to solve for and
+// guessing which of the three was the typo is not this function's business.
+//
+// None of that happens unless the ledger balanced to begin with. A save whose
+// three numbers already disagree is not a ledger this code understands, and
+// picking one of them to believe would be a guess; the synthetic fixtures are
+// exactly that case, since they set munny and leave the pair at zero. So the
+// rule is narrow on purpose: Patch keeps an identity that held from breaking,
+// and never invents a value to repair one that was already broken. A document
+// that names all three and contradicts itself is still rejected either way,
+// because that is a mistake in the document rather than in the save.
+const (
+	munnyBalance = iota
+	munnyEarned
+	munnySpent
+)
+
+var munnyLedgerKeys = [3]string{"munny", "munny_earned", "munny_spent"}
+
+func readMunnyLedger(p []byte) [3]int64 {
+	return [3]int64{
+		readField(p, 0x28, "u32"),
+		readField(p, MunnyEarnedOff, "u32"),
+		readField(p, MunnySpentOff, "u32"),
+	}
+}
+
+func writeMunnyField(p []byte, i int, v int64) {
+	switch i {
+	case munnyBalance:
+		writeField(p, 0x28, "u32", v)
+	case munnyEarned:
+		writeField(p, MunnyEarnedOff, "u32", v)
+	default:
+		writeField(p, MunnySpentOff, "u32", v)
+	}
+}
+
+// reconcileMunny restores earned - spent == balance after the header loop has
+// written whatever the document said, and appends the correction it made to
+// changes so nobody is surprised by a field they did not name.
+func reconcileMunny(p []byte, before [3]int64, changes *[]string) error {
+	now := readMunnyLedger(p)
+	var moved []int
+	for i := range now {
+		if now[i] != before[i] {
+			moved = append(moved, i)
+		}
+	}
+	if len(moved) == 0 {
+		return nil
+	}
+	if len(moved) == 3 {
+		if now[munnyEarned]-now[munnySpent] == now[munnyBalance] {
+			return nil
+		}
+		return fmt.Errorf("header.munny %d, header.munny_earned %d and header.munny_spent %d "+
+			"cannot all be right: earned minus spent has to be munny. Move at most two of "+
+			"the three and the third is worked out",
+			now[munnyBalance], now[munnyEarned], now[munnySpent])
+	}
+	if before[munnyEarned]-before[munnySpent] != before[munnyBalance] {
+		return nil // never balanced; see above
+	}
+
+	// Solve for the field the document left alone. With two left alone, a
+	// moved balance is absorbed by earned and a moved ledger side by balance.
+	solve := munnyBalance
+	if len(moved) == 1 && moved[0] == munnyBalance {
+		solve = munnyEarned
+	} else if len(moved) == 2 {
+		for i := range now {
+			if i != moved[0] && i != moved[1] {
+				solve = i
+			}
+		}
+	}
+
+	want := now[munnyEarned] - now[munnySpent] // solve == munnyBalance
+	switch solve {
+	case munnyEarned:
+		want = now[munnyBalance] + now[munnySpent]
+	case munnySpent:
+		want = now[munnyEarned] - now[munnyBalance]
+	}
+	if want < 0 || want > 0xFFFFFFFF {
+		return fmt.Errorf("keeping the munny ledger consistent would put header.%s at %d, "+
+			"which does not fit the field; set it yourself if that is really what you meant",
+			munnyLedgerKeys[solve], want)
+	}
+	if want == now[solve] {
+		return nil
+	}
+	writeMunnyField(p, solve, want)
+	*changes = append(*changes, fmt.Sprintf("header.%s: %d -> %d (kept consistent with %s)",
+		munnyLedgerKeys[solve], now[solve], want, munnyLedgerKeys[moved[0]]))
+	return nil
+}
+
 // Patch applies a partial JSON document. Keys that are absent are left alone.
 func Patch(plain, doc []byte) ([]byte, []string, error) {
 	var d map[string]any
@@ -501,6 +616,10 @@ func Patch(plain, doc []byte) ([]byte, []string, error) {
 	byName := map[string]headerField{}
 	for _, f := range headerFields {
 		byName[f.name] = f
+	}
+	var ledgerBefore [3]int64
+	if IsSlot(out) {
+		ledgerBefore = readMunnyLedger(out)
 	}
 
 	if hdr, ok := d["header"].(map[string]any); ok {
@@ -551,6 +670,11 @@ func Patch(plain, doc []byte) ([]byte, []string, error) {
 			writeField(out, f.off, f.kind, nv)
 			if old != nv {
 				changes = append(changes, fmt.Sprintf("header.%s: %d -> %d", key, old, nv))
+			}
+		}
+		if IsSlot(out) {
+			if err := reconcileMunny(out, ledgerBefore, &changes); err != nil {
+				return nil, nil, err
 			}
 		}
 	}

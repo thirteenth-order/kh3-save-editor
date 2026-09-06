@@ -318,6 +318,7 @@ func cmdInfo(args []string) error {
 		fmt.Printf("  difficulty   %d (%s)\n", h.Difficulty, kh3.Difficulties[h.Difficulty])
 		fmt.Printf("  level        %d    playtime %s    munny %d    exp %d\n",
 			h.Level, h.Playtime(), h.Munny, h.TotalExp)
+		fmt.Printf("  munny ledger earned %d   spent %d\n", h.MunnyEarned, h.MunnySpent)
 		fmt.Printf("  world        %s\n", kh3.WorldName(int(h.WorldLogo)))
 		fmt.Printf("  location     %d (%s)\n", h.Location, kh3.LocationName(int(h.Location)))
 		fmt.Printf("  saves %d   enemies defeated %d   crabs %d\n",

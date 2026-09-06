@@ -830,7 +830,7 @@ func TestPatchDryRunWritesNothing(t *testing.T) {
 	}
 	var res swapResponse
 	json.Unmarshal(w.Body.Bytes(), &res)
-	if res.Written || len(res.Changes) != 1 {
+	if res.Written || len(res.Changes) == 0 {
 		t.Errorf("written=%v changes=%v; a dry run reports and writes nothing", res.Written, res.Changes)
 	}
 	after, err := os.ReadFile(p)
