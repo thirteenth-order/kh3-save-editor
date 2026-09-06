@@ -394,6 +394,16 @@ read-only and moving one is an error, though a document that carries them
 unchanged is fine. Unknown characters, unknown keys and out-of-range indexes
 are errors rather than silent no-ops.
 
+Three header fields are not independent, and `patch` keeps them consistent
+rather than letting a document half-move them. `munny` is a balance:
+`munny_earned` minus `munny_spent`, so setting one of the three works out the
+field you left alone, and naming all three with numbers that contradict each
+other is an error. `enemies_defeated` and `save_icon` are each stored twice, and
+the second copy follows the first. Every correction is listed among the reported
+changes, and none of it happens on a save whose numbers already disagreed --
+`patch` keeps a relationship that held from breaking, and never invents a value
+to repair one that was already broken.
+
 The interface is the same two functions: its **Document** view is this
 document, and its **Fields** view is a form generated from `kh3save schema`.
 Neither can validate differently from the CLI, because both call `Patch`.
@@ -534,6 +544,7 @@ No PS4 sample has been round-tripped through a real console yet.
 | 0x5B8 | u16 | saves count |
 | 0x696 | u16 x5 | attraction use counters |
 | 0x6D0 | u16 x30 | shotlock use counters |
+| 0x504 | u32 | second copy of enemies defeated |
 | 0x840 / 0x844 | u32 | munny earned / spent; earned - spent is the munny at 0x28 |
 | 0x8F4 | 0x400 x 2 | inventory: count, flags |
 | 0x165E | u16 x100 | synthesis material counts |
@@ -545,6 +556,7 @@ No PS4 sample has been round-tripped through a real console yet.
 | 0xBCE0 / 0xBDE0 | char[0x100] | player script / pawn |
 | 0xBF20 | 3 x 4 x u32 | shortcuts: three pages of four buttons |
 | 0xBF50 / 0xBF68 | u32 x6 / x5 | magic / links |
+| 0xC310 | u32 | second copy of the save icon |
 
 Per character, from `0x1880 + n * 0x9C0`:
 

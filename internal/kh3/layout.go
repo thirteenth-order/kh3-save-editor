@@ -43,6 +43,27 @@ const (
 	MunnyEarnedOff = 0x840 // u32, munny earned to date
 	MunnySpentOff  = 0x844 // u32, munny spent to date
 
+	// Two fields the format stores a second copy of, and only two: a sweep of
+	// every mapped scalar that varies across the five samples, matching each
+	// one's whole five-value sequence against every offset in the file, finds
+	// exactly these. playtime, exp, munny, level, location, difficulty,
+	// saves_count and the per-character HP and MP have no second copy at all.
+	//
+	// SaveIconMirrorOff is the stronger of the two, because save_icon is the
+	// one mapped field that does not simply climb: it reads 12, 11, 16, 11, 12
+	// across the samples in time order, and 0xC310 reads the same five. A
+	// coincidence does not follow a sequence back down.
+	//
+	// EnemiesDefeatedMirrorOff sits in the counter block at 0x4EC and agrees
+	// with 0x70 in all five. What the samples cannot settle is mirror versus
+	// "defeated in the current world", because all five are in Olympus and a
+	// per-world counter would read identically. Location varies across them and
+	// this does not, so it is at least not per-location. Patch handles the
+	// ambiguity by only ever keeping the two equal when they already were,
+	// which is right under either reading.
+	EnemiesDefeatedMirrorOff = 0x504  // u32, twin of EnemiesDefeated at 0x70
+	SaveIconMirrorOff        = 0xC310 // u32, twin of SaveIcon at 0x60
+
 	StoryFlagOff   = 0xB4C4 // i32 per StoryFlags entry: a story-label number
 	StoryFlagCount = 80
 

@@ -600,6 +600,55 @@ func reconcileMunny(p []byte, before [3]int64, changes *[]string) error {
 	return nil
 }
 
+// headerMirrors are the fields the format keeps a second copy of. Dump exposes
+// only the first of each pair, so a document can move it and leave the copy
+// behind -- which is the same silent-revert exposure the munny ledger has, and
+// gets the same narrow treatment: the copy is kept equal only when it already
+// was.
+//
+// That rule is what makes it safe without knowing which of the two readings of
+// 0x504 is right (see layout.go). If it is a mirror, the two always agree and
+// are always kept agreeing. If it is really a per-world count, then a save past
+// the first world has them differing already and this leaves it alone; and a
+// save still in the first world has every kill in that world, so setting both
+// to the same number is right there too.
+var headerMirrors = []struct {
+	Name       string
+	Off        int
+	Kind       string
+	MirrorOff  int
+	MirrorKind string
+}{
+	{"enemies_defeated", 0x70, "u32", EnemiesDefeatedMirrorOff, "u32"},
+	{"save_icon", 0x60, "u8", SaveIconMirrorOff, "u32"},
+}
+
+func readMirrors(p []byte) [][2]int64 {
+	out := make([][2]int64, len(headerMirrors))
+	for i, m := range headerMirrors {
+		out[i] = [2]int64{readField(p, m.Off, m.Kind), readField(p, m.MirrorOff, m.MirrorKind)}
+	}
+	return out
+}
+
+// reconcileMirrors carries a moved field into its second copy, and reports it.
+func reconcileMirrors(p []byte, before [][2]int64, changes *[]string) {
+	for i, m := range headerMirrors {
+		if before[i][0] != before[i][1] {
+			continue // never agreed; not ours to repair
+		}
+		now := readField(p, m.Off, m.Kind)
+		was := readField(p, m.MirrorOff, m.MirrorKind)
+		if now == was {
+			continue
+		}
+		writeField(p, m.MirrorOff, m.MirrorKind, now)
+		*changes = append(*changes, fmt.Sprintf(
+			"header.%s second copy at %s: %d -> %d (kept consistent)",
+			m.Name, hexOff(m.MirrorOff), was, now))
+	}
+}
+
 // slotOnlySections are the parts of a document that only exist for a
 // per-playthrough slot. Dump omits the first seven for the small system file
 // and emits the last three empty, so an empty one has to stay acceptable or a
@@ -656,8 +705,10 @@ func Patch(plain, doc []byte) ([]byte, []string, error) {
 		byName[f.name] = f
 	}
 	var ledgerBefore [3]int64
+	var mirrorsBefore [][2]int64
 	if IsSlot(out) {
 		ledgerBefore = readMunnyLedger(out)
+		mirrorsBefore = readMirrors(out)
 	} else if err := refuseSlotOnlyKeys(d, byName); err != nil {
 		return nil, nil, err
 	}
@@ -716,6 +767,7 @@ func Patch(plain, doc []byte) ([]byte, []string, error) {
 			if err := reconcileMunny(out, ledgerBefore, &changes); err != nil {
 				return nil, nil, err
 			}
+			reconcileMirrors(out, mirrorsBefore, &changes)
 		}
 	}
 
