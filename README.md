@@ -19,7 +19,7 @@ no real-time capture.
 [![go version](https://img.shields.io/github/go-mod/go-version/thirteenth-order/kh3-save-editor)](go.mod)
 [![license](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
-<img src="docs/screenshot-saves.png" alt="The kh3save interface listing save slots, each showing its difficulty, level, playtime, munny and location" width="720">
+<img src="docs/screenshot-saves.png" alt="The kh3save interface listing three save slots, each showing its difficulty, level, playtime, munny, world and map, above a save folder whose account id is masked" width="720">
 
 </div>
 
@@ -225,6 +225,16 @@ drawn as a bar. Where a number's offset is upstream's word rather than
 something this project confirmed against the game, the panel says so where the
 number is read.
 
+Two panels come up covered. The party sheets name whoever is travelling with
+Sora, and the story list names worlds, and somebody who opened a save to change
+its difficulty has not asked to be told who they are about to meet. Nothing
+under a cover is in the page until it is asked for, so it stays out of a
+find-in-page and out of a screenshot as well as out of sight. Uncovering one
+lasts as long as the tab is open; a fresh run starts covered again. The shot
+below has both lifted, because a picture of two covers would not tell you much.
+
+<img src="docs/screenshot-summary.png" alt="The Summary dashboard: panels for where the save is, its numbers as tiles with meters for level and lucky emblems, and a party panel of character sheets showing HP, MP, focus, equipped gear by kind, ability counts and AI behaviour" width="720">
+
 **Fields** is a form, and it is not hand-written. The program publishes a
 description of every field it can edit -- what each one is called, which table
 names its ids, what range the format allows, and where it is stored -- and the
@@ -234,7 +244,7 @@ with no interface work at all. An equipment slot is the clearest case: the type
 byte selects which of KH3's ten item id spaces the id belongs to, so choosing a
 type re-points the item picker at the table that names ids of that type.
 
-<img src="docs/screenshot-fields.png" alt="The Fields view: collapsible sections for header, party, shortcuts, magic, links, story progress, materials, inventory, keychain upgrades, records and characters, with Sora expanded to show stats and an accessory slot whose type and item are chosen from named lists" width="720">
+<img src="docs/screenshot-fields.png" alt="The Fields view: collapsible sections for header, party, shortcuts, magic, links, story progress, materials, inventory, keychain upgrades, records and characters, with Sora expanded down to an accessory slot whose type and item are each chosen from a named list" width="720">
 
 **Document** is the JSON itself, with line numbers, highlighting, and a
 validator that runs as you type: it marks the line, names the path and says
@@ -245,11 +255,24 @@ scope picker narrows the box to one section or one character, because a whole
 dump is a lot of text to hunt through when the thing being changed is one
 character's abilities.
 
-<img src="docs/screenshot-json.png" alt="The Document view: a JSON editor with line numbers and syntax highlighting, two lines marked in the gutter, and a panel listing the problems -- an unknown header key and a level above the maximum the field can hold" width="720">
+<img src="docs/screenshot-json.png" alt="The Document view: a JSON editor with line numbers and syntax highlighting, a scope picker set to the whole document, and a validator reporting that the document checks out" width="720">
 
 Nothing is written until the server has agreed: **Preview changes** asks it what
 the document would do and prints the list, and **Apply** shows the same list for
 confirmation before writing. A timestamped backup comes first either way.
+
+A save is linkable. The fragment carries which one is open and how, so a reload
+comes back to it rather than to the list:
+
+```
+#slot=2                       the third save in the list
+#slot=2&tab=edit              opened on Fields
+#slot=2&tab=edit&open=header  with a section already unfolded
+#slot=2&reveal=party,story    and the spoiler covers already lifted
+```
+
+That is also how the screenshots above are taken, which is why they are
+reproducible rather than shot by hand -- `tools/demo/shoot.sh`.
 
 ## Command line
 
@@ -666,6 +689,13 @@ as written, the binary embeds those exact bytes, and there is no bundler and no
 build step anywhere in the release path -- `go build` on a clean checkout is
 still the whole story. TypeScript is a dev-only dependency, pinned, and emits
 nothing.
+
+The images in this file are generated too, and for the same reason a test is:
+one taken by hand goes stale the moment the interface moves, and nobody can
+check it. `make demo` re-records the terminal GIFs with asciinema, and `make
+shots` re-shoots the browser screenshots through a headless Chromium. Both
+build their own synthetic save under account 76561190000000000, an id that
+belongs to nobody, because an image renders text that no grep will ever find.
 
 ### Building without installing a toolchain
 

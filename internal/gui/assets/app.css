@@ -637,10 +637,13 @@ footer .legal { margin-top:.4rem; opacity:.8; }
   grid-template-columns:repeat(auto-fit,minmax(17rem,1fr)); }
 .sheet { padding:.85rem 1rem; border-radius:.7rem;
   background:var(--glass); border:1px solid var(--hair); }
-.sheet-head { display:flex; align-items:center; gap:.6rem; margin-bottom:.6rem; }
-.sheet-head b { font:400 1.1rem/1 var(--serif); letter-spacing:.02em; }
-.sheet-head .grow { flex:1; }
-.sheet-head .facts { margin-top:0; }
+/* The name sits on its own line above the vitals. Side by side, a sheet in a
+   narrow column centred a one-line name against three wrapped chips, which
+   read as a layout bug rather than as a heading. */
+.sheet-head { margin-bottom:.7rem; }
+.sheet-head b { display:block; font:400 1.1rem/1 var(--serif); letter-spacing:.02em; }
+.sheet-head .grow { display:none; }
+.sheet-head .facts { margin-top:.5rem; }
 .sheet .detail { gap:.35rem; }
 .sheet .dk { width:5.5rem; }
 

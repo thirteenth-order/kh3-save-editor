@@ -126,6 +126,13 @@ function ovEmpty(text) { return el("p", "ovempty", text); }
 // fresh run starts covered again.
 const REVEALED = new Set();
 
+// Uncover panels named in the fragment route. It is how a deep link into a
+// save can say "and I already know what is in here", and how the screenshot
+// script shoots the party sheets without a click it has no way to make.
+export function revealSpoilers(keys) {
+  for (const k of keys || []) if (k) REVEALED.add(k);
+}
+
 function ovSpoiler(key, warning, build) {
   const box = el("div", "spoiler");
   const body = el("div", "spoiler-body");

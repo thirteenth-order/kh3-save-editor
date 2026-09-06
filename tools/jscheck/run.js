@@ -22,14 +22,34 @@ const detail = JSON.parse(fs.readFileSync(path.join(dir, "detail.json"), "utf8")
 // was never any isolation worth keeping here. This is a one-shot check, not a
 // sandbox. The modules read these off the global scope the same way they would
 // read them off a window.
+// The fragment is the shell's router, so the stub has to be a real enough one
+// to route: assigning to location.hash has to reach whatever the page
+// registered for hashchange, or a card click sets a string and nothing else
+// happens. Everything else stays inert.
+const listeners = {};
+const loc = { search: "?t=test", pathname: "/", hash: "" };
+Object.defineProperty(loc, "hash", {
+  get: function () { return loc._hash || ""; },
+  set: function (v) {
+    loc._hash = v && v[0] !== "#" ? "#" + v : v;
+    for (const fn of listeners.hashchange || []) fn();
+  },
+});
+
 Object.assign(globalThis, {
   document: doc,
-  location: { search: "?t=test" },
+  location: loc,
   navigator: {},
   Event: class { constructor(t) { this.type = t; } },
   // The shell reaches for these at import time.
-  history: { pushState() {}, back() {} },
-  addEventListener() {},
+  history: {
+    pushState() {},
+    back() {},
+    // Dropping a stale fragment must not route again, which is the whole
+    // reason the shell uses replaceState for it rather than assignment.
+    replaceState() { loc._hash = ""; },
+  },
+  addEventListener(type, fn) { (listeners[type] = listeners[type] || []).push(fn); },
   scrollTo() {},
   scrollY: 0,
   // loadSchema is the only thing here that talks to the server, and it goes
@@ -389,6 +409,9 @@ function ok(name, cond, extra) {
   ok("the dashboard is what it opens on", ws.indexOf("Olympus") > -1 &&
     ws.indexOf("Lucky emblems") > -1);
 
+  ok("opening a save puts it in the fragment, so a reload finds it again",
+    loc.hash === "#slot=0", "hash is " + JSON.stringify(loc.hash));
+
   // The system file has no difficulty and no characters. It still opens, and
   // it has to say what it is rather than drawing an empty playthrough.
   cards[1].onclick();
@@ -396,6 +419,39 @@ function ok(name, cond, extra) {
   await settle();
   ok("the system file opens and says what it is",
     reads().indexOf("System file") > -1);
+
+  /* ---------------------------------------------------------------- the route */
+  // The fragment is what makes a save linkable and a reload survivable, so
+  // arriving by fragment has to land in the same place a click does.
+
+  loc.hash = "slot=0&tab=json";
+  await settle();
+  await settle();
+  ok("a fragment can name the view to open on",
+    reads().indexOf("All saves") > -1);
+
+  loc.hash = "slot=0&tab=edit&open=header";
+  await settle();
+  await settle();
+  const unfolded = [...page.walk()].filter(function (n) {
+    return n.classList.contains("fold") && n.classList.contains("open");
+  }).length;
+  ok("and a section to unfold", unfolded > 0, "opened " + unfolded);
+
+  // A link to a save that is not there must not leave the reader staring at a
+  // blank page, and dropping the fragment must not route a second time.
+  loc.hash = "slot=99";
+  await settle();
+  await settle();
+  ok("a stale link falls back to the list", reads().indexOf("slot0") > -1);
+  ok("and clears the fragment without routing again", loc.hash === "");
+
+  // The broken slot is in the list but must not be reachable by index either.
+  loc.hash = "slot=2";
+  await settle();
+  await settle();
+  ok("a slot that would not open is not reachable by link",
+    reads().indexOf("could not decrypt") > -1 && loc.hash === "");
 
   console.log(fails ? "\n" + fails + " check(s) failed" : "\nall good");
   process.exit(fails ? 1 : 0);

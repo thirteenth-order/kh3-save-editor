@@ -14,7 +14,7 @@ import {
 import { codeEditor, parseError } from "./editor.js";
 import { SCHEMA, indexLines, loadSchema, validate } from "./schema.js";
 import { buildForm } from "./forms.js";
-import { overview } from "./overview.js";
+import { overview, revealSpoilers } from "./overview.js";
 
 const app = document.getElementById("app");
 const topbar = document.getElementById("topbar");
@@ -162,11 +162,11 @@ function slotCard(slot, index) {
   box.tabIndex = 0;
   box.setAttribute("role", "button");
   box.setAttribute("aria-label", "Open " + slot.slot);
-  box.onclick = function () { openWorkspace(slot); };
+  box.onclick = function () { openWorkspace(index); };
   box.onkeydown = function (e) {
     if (e.key !== "Enter" && e.key !== " ") return;
     e.preventDefault();
-    openWorkspace(slot);
+    openWorkspace(index);
   };
   return box;
 }
@@ -307,7 +307,7 @@ function difficultyPanel(slot, session, onSwapped) {
 
 function clone(v) { return JSON.parse(JSON.stringify(v)); }
 
-function buildWorkbench(slot, loaded, session) {
+function buildWorkbench(slot, loaded, session, at) {
   const state = {
     doc: loaded,
     saved: clone(loaded),
@@ -315,9 +315,12 @@ function buildWorkbench(slot, loaded, session) {
     // the editor must say so rather than offering controls that fail on write.
     caps: { records: !!(loaded.records && loaded.records.minigames) },
     dirty: false,
-    // Path -> open, remembered across the rebuilds a tab switch causes.
+    // Path -> open, remembered across the rebuilds a tab switch causes, and
+    // seeded from the route so a link can open a save at a section.
     folds: new Map(),
   };
+  for (const path of (at && at.open) || []) state.folds.set(path, true);
+  for (const path of (at && at.shut) || []) state.folds.set(path, false);
   // The difficulty swap writes the file directly, so it has to know
   // whether there is unsaved work in here before it does.
   session.dirty = function () { return state.dirty; };
@@ -460,7 +463,7 @@ function buildWorkbench(slot, loaded, session) {
     "anything is touched."), acts, log);
 
   wrap.append(tabs, problemBar, panes, foot);
-  show("overview");
+  show(builders[(at && at.tab)] ? at.tab : "overview");
   return wrap;
 }
 
@@ -801,7 +804,7 @@ function workspaceHead(slot, doc, session, reload) {
   return box;
 }
 
-async function paintWorkspace(slot) {
+async function paintWorkspace(slot, at) {
   const holder = el("div");
   holder.append(el("div", "skel"), el("div", "skel"));
   app.append(workspaceBar(slot), holder);
@@ -818,15 +821,17 @@ async function paintWorkspace(slot) {
 
   // The workbench owns the document; the head only needs to know whether it
   // has unsaved work in it, which is what session carries between them.
+  if (at && at.reveal) revealSpoilers(at.reveal);
+
   const session = { dirty: function () { return false; } };
-  const bench = buildWorkbench(slot, doc, session);
+  const bench = buildWorkbench(slot, doc, session, at);
   const head = workspaceHead(slot, doc, session, function () {
     // The swap wrote the file. Rebuild from disk rather than reasoning about
     // what moved: it touches HP, MP and three ability words as well as the
     // flag, and a card in the list behind us now reads the old difficulty.
     SCAN = null;
     app.innerHTML = "";
-    paintWorkspace(slot);
+    paintWorkspace(slot, at);
   });
 
   holder.innerHTML = "";
@@ -834,46 +839,68 @@ async function paintWorkspace(slot) {
 }
 
 /* --------------------------------------------------------------- layout -- */
+// The fragment is the route.
+//
+// It replaced a pushState that pushed the same URL, which gave Back something
+// to pop and nothing else: a reload landed back on the list, having thrown
+// away which save was open. A fragment survives the reload, leaves the token
+// in the query untouched, and makes a save's editor something that can be
+// linked to at all.
+//
+//   #slot=2                         the third save in the list
+//   #slot=2&tab=edit                opened on Fields
+//   #slot=2&tab=edit&open=header    with a section already unfolded
+//   #slot=2&tab=edit&shut=header    or with the one it opens by default shut
+//   #slot=2&reveal=party,story      and the spoiler covers already lifted
+//
+// The index is into the list as it is drawn, which is the only stable name a
+// slot has here: a path would put a save folder in the address bar, and on
+// Steam that names the account.
 
 const wrapNode = document.querySelector(".wrap");
 
 // The last scan, kept so stepping back out of a save is instant. Anything
 // that writes a file drops it, because a card renders what is on disk.
 let SCAN = null;
-let VIEW = { name: "library", slot: null };
 
-function openWorkspace(slot) {
-  VIEW = { name: "workspace", slot: slot };
-  // Same URL, so the token in the query survives; the entry exists only to
-  // give the browser's Back button something to pop.
-  history.pushState({ kh3: "workspace" }, "");
-  paint();
+function readRoute() {
+  const at = { open: [], shut: [], reveal: [] };
+  for (const part of location.hash.replace(/^#/, "").split("&")) {
+    if (!part) continue;
+    const cut = part.indexOf("=");
+    const key = decodeURIComponent(cut < 0 ? part : part.slice(0, cut));
+    const val = cut < 0 ? "" : decodeURIComponent(part.slice(cut + 1));
+    if (key === "open" || key === "shut" || key === "reveal") {
+      at[key] = val.split(",").filter(Boolean).map(function (v) {
+        // Fold paths are rooted, so a link may leave the leading slash off.
+        return key !== "reveal" && v[0] !== "/" ? "/" + v : v;
+      });
+      continue;
+    }
+    at[key] = val;
+  }
+  return at;
 }
 
-addEventListener("popstate", function () {
-  if (VIEW.name !== "workspace") return;
-  VIEW = { name: "library", slot: null };
-  paint();
-});
+// Every slot in the order the cards are drawn, which is what an index means.
+function allSlots() {
+  const out = [];
+  for (const d of (SCAN && SCAN.dirs) || []) for (const sl of d.slots) out.push(sl);
+  return out;
+}
 
-async function paint() {
+function openWorkspace(index) { location.hash = "slot=" + index; }
+
+async function route() {
   app.innerHTML = "";
   scrollTo({ top: 0 });
-  // The list reads well narrow; a save's dashboard does not.
-  wrapNode.classList.toggle("wide", VIEW.name === "workspace");
-  if (VIEW.name === "workspace") return paintWorkspace(VIEW.slot);
-  return paintLibrary();
-}
 
-// render refetches and shows the list. folderPanel calls it once a folder is
-// added or forgotten, and both Rescan buttons go through it.
-async function render() {
-  SCAN = null;
-  VIEW = { name: "library", slot: null };
-  await paint();
-}
+  const at = readRoute();
+  const index = Number(at.slot);
+  const wanted = at.slot !== undefined && Number.isInteger(index) && index >= 0;
+  // The list reads well narrow. One save's dashboard does not.
+  wrapNode.classList.toggle("wide", wanted);
 
-async function paintLibrary() {
   if (!SCAN) {
     app.append(el("div", "skel"), el("div", "skel"));
     try {
@@ -885,6 +912,30 @@ async function paintLibrary() {
     }
     app.innerHTML = "";
   }
+
+  const slot = wanted ? allSlots()[index] : null;
+  if (wanted && (!slot || slot.error)) {
+    // A stale link, or one to a save that has since gone. Drop the fragment
+    // with replaceState rather than by assignment, which would fire hashchange
+    // and route again.
+    history.replaceState(null, "", location.pathname + location.search);
+    wrapNode.classList.remove("wide");
+    return paintLibrary();
+  }
+  if (slot) return paintWorkspace(slot, at);
+  return paintLibrary();
+}
+
+addEventListener("hashchange", function () { route(); });
+
+// render refetches and shows whatever the route asks for. folderPanel calls it
+// once a folder is added or forgotten, and both Rescan buttons go through it.
+async function render() {
+  SCAN = null;
+  await route();
+}
+
+function paintLibrary() {
   const data = SCAN;
 
   if (data.gameRunning) {

@@ -82,6 +82,10 @@ fixture-full: ## same, at the size of a real save so the tail regions are there
 demo: ## re-record the README terminal GIFs (needs asciinema and agg)
 	@tools/demo/record.sh $(SCENES)
 
+.PHONY: shots
+shots: ## re-shoot the README browser screenshots (needs a Chromium)
+	@tools/demo/shoot.sh $(SHOTS)
+
 
 ##@ Docker
 
