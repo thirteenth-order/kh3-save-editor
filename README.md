@@ -4,9 +4,11 @@
 
 # KH3 Save Editor
 
-**Change the difficulty of a Kingdom Hearts III save mid-playthrough.**
-Offline, reversible, and checksummed. No running game, no memory hooks, no
-real-time capture.
+**Read and edit a Kingdom Hearts III save, offline.** Change the difficulty
+mid-playthrough, or edit anything else the format holds: equipment, party,
+abilities, inventory, synthesis materials, magic, shortcuts and story progress.
+Reversible and checksummed. No running game, no memory hooks, no real-time
+capture.
 
 [![ci](https://github.com/thirteenth-order/kh3-save-editor/actions/workflows/ci.yml/badge.svg)](https://github.com/thirteenth-order/kh3-save-editor/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/thirteenth-order/kh3-save-editor?color=dfba73)](https://github.com/thirteenth-order/kh3-save-editor/releases/latest)
@@ -193,17 +195,39 @@ The interface covers the common case. The CLI covers the rest.
 ```sh
 kh3save                              # open the interface
 kh3save info      <save|dir|zip>...  # header fields
+kh3save info -l   <save>             # ...plus party, gear, magic, materials
 kh3save verify    <save|dir|zip>...  # check both integrity fields
 kh3save swap      <save>  -d Proud   # difficulty, faithfully
 kh3save abilities <save>             # per-character ability list
 kh3save diff      <a> <b>            # byte diff of two saves
 kh3save rekey     <save>  -to <id>   # move a save between Steam accounts
+kh3save convert   <save>  -to plain  # strip or add the Steam wrapper
 kh3save dump      <save>  -o s.json  # render as JSON
 kh3save patch     <save>  s.json     # apply a partial JSON document
 ```
 
 The account id is detected from the save path. Override it with `-account` or
 `$KH3_ACCOUNT`. In-place edits are always backed up first.
+
+### Saves that are not Steam-encrypted
+
+The save structure is the same however it is stored; only the PC wrapper is
+Steam-specific. A save with no wrapper -- what a console save tool hands back
+once it has opened its own container, and what `decrypt` writes -- is read and
+written by every command above **with no account id at all**, because there is
+no key involved. `info` says which form it found.
+
+`convert` moves a save between the two:
+
+```sh
+kh3save convert -to plain <save>              # strip the Steam wrapper
+kh3save convert -to pc -account <id> <save>   # add one, keyed to that account
+```
+
+The round trip is byte-exact: strip the wrapper and put it back on and you get
+the file you started with. Note that a console's own savedata container is a
+separate layer this tool does not open or re-sign; `convert` deals with the
+file *inside* it.
 
 ### What it looks like
 
@@ -260,21 +284,52 @@ unpack it back into your save folder before playing.
 <br>
 
 `dump` writes the mapped state as JSON; `patch` applies a partial document, so
-it only needs the keys you want to change:
+it only needs the keys you want to change. This is the whole editing surface:
+anything the format layer knows about is in here, named rather than numbered.
 
 ```json
 {
-  "header": { "difficulty": 3, "munny": 12345 },
-  "characters": { "Sora": { "hp": 99, "abilities": { "0x068": "0x0000044B" } } },
+  "header": { "difficulty": 3, "munny": 12345, "crabs": 100 },
+  "party": { "1": 13 },
+  "magic": { "0": 29 },
+  "shortcuts": { "0": { "circle": 29, "triangle": 33 } },
+  "materials": { "0": 99 },
+  "story_flags": { "29": 2101 },
+  "characters": {
+    "Sora": {
+      "hp": 99,
+      "abilities": { "0x068": "0x0000044B" },
+      "current_weapon": 1,
+      "ai": { "combat_style": 1 },
+      "equipment": {
+        "weapons": { "0": { "id": 15, "type": 3 } },
+        "accessories": { "1": null }
+      }
+    }
+  },
   "inventory": { "256": 1 }
 }
 ```
 
+A dump writes `{"id": 29, "name": "Fire"}`; a patch takes either that or the
+bare `29`, so hand-editing a dump and deleting the noise around a number
+works. `null` clears an equipment slot. An equipment entry always needs its
+`type`: KH3 has about ten separate item id spaces and the type byte is what
+says which one an id belongs to, so an id on its own is meaningless.
+
+A whole dump can be fed straight back to `patch` unchanged; it reports no
+changes and writes nothing.
+
 <img src="docs/demo-json.gif" alt="kh3save dump writing a save to JSON, then patch applying a three-key document and reporting each field it changed" width="720">
 
 Integers accept decimal or `0x` hex. The size, version and checksum fields are
-refused as read-only; unknown characters and unknown keys are errors rather
-than silent no-ops.
+read-only and moving one is an error, though a document that carries them
+unchanged is fine. Unknown characters, unknown keys and out-of-range indexes
+are errors rather than silent no-ops.
+
+The interface exposes the same thing: **Details** on a save renders the
+document as a summary, and **Edit as JSON** hands you the document to change,
+previews what it would do, and applies it through exactly the same checks.
 
 </details>
 
@@ -297,7 +352,7 @@ one ciphertext block, the encryption of sixteen zero bytes, repeats 591,103
 times out of 610,128, and only 234 distinct blocks appear in the entire file.
 That repetition is what identifies the mode, and it is also why a 29 MB save
 set compresses to 84 KB: **98.6% of the file is an empty photo album**, 9.2 MB
-of zeros at offset 0x84E5C.
+of zeros filling the tail of the file.
 
 > Note the value of that repeated block is deliberately not printed here. The
 > key is derived from the account id alone, so a known plaintext and ciphertext
@@ -352,22 +407,43 @@ Because the key is per-account, a save is bound to the account that wrote it.
 | 0x20 / 0x24 / 0x28 | u32 | playtime, EXP, munny |
 | 0x2C | u8 | level |
 | 0x30 / 0x31 | u8 | Desire / Power choice |
+| 0x32 | u8 x5 | party |
 | 0x54 | u8 | location |
+| 0x60 / 0x68 | u8 | save icon / DLC save icon |
 | 0x70 | u32 | enemies defeated |
 | 0x5B8 | u16 | saves count |
+| 0x696 | u16 x5 | attraction use counters |
+| 0x6D0 | u16 x30 | shotlock use counters |
 | 0x8F4 | 0x400 x 2 | inventory: count, flags |
+| 0x165E | u16 x100 | synthesis material counts |
+| 0x17EC | i32 | crabs collected |
 | 0x1880 | 16 x 0x9C0 | playable characters |
 | 0xB49C.. | i32 x5 | bonus HP / MP / strength / magic / defense |
+| 0xB4C4 | i32 x80 | story flags, one per world |
 | 0xBBA0 / 0xBCA0 | char[] | map path / spawn point |
-| 0x84E5C | 90 x 0x19004 | photo album |
+| 0xBCE0 / 0xBDE0 | char[0x100] | player script / pawn |
+| 0xBF20 | 3 x 4 x u32 | shortcuts: three pages of four buttons |
+| 0xBF50 / 0xBF68 | u32 x6 / x5 | magic / links |
 
 Per character, from `0x1880 + n * 0x9C0`:
 
 | Offset | Field |
 | :-- | :-- |
-| +0xD8 | 8 accessory slots, 8 bytes each |
+| +0x06 | current weapon slot |
+| +0x80 | 3 weapon slots, 8 bytes each |
+| +0x98 | 8 armor slots |
+| +0xD8 | 8 accessory slots |
+| +0x118 | 8 item slots |
+| +0x158.. | AI: combat style, ability use, recovery use, targets |
 | +0x160 | 512 abilities, 4 bytes each |
 | +0x984 / +0x988 / +0x98C | current HP / MP / Focus |
+
+An equipment slot is `{ id, item type, _, _, enabled, _, _, _ }`. The id means
+nothing on its own: KH3 keeps about ten separate id spaces -- keyblades,
+armor, accessories, consumables, snacks, synthesis items, key items and so on
+-- and the type byte selects which one to read the id against. The four arrays
+are contiguous from +0x80 to +0x158 with no gap between them, so an off-by-one
+in any offset or slot count writes silently into the next array.
 
 Maximum HP and MP are **not** stored. They are derived at runtime from level,
 difficulty and the bonus fields, which is why a difficulty change rescales them
@@ -486,11 +562,19 @@ This stands on two existing projects and would not exist without them.
   is where the key derivation was first published in Python. The algorithm
   originates in a PowerShell script **dedede123** shared on the OpenKH Discord.
 
-What this adds over them: the container crypto and the editing in one tool (the
-C# editor contains no AES at all and requires a pre-decrypted save; the Python
-one is a Dash web app), difficulty changes that carry their side effects,
-`rekey`, the full ability-word decode including the innate bit and the
-equipment source bits, and a written format specification.
+What this adds over them: the container crypto and the editing in one tool
+(the C# editor contains no AES at all and requires a save that is already
+unwrapped; the Python one is a Dash web app whose KH3 support stops at the
+header), difficulty changes that carry their side effects, `rekey` and
+`convert`, the full ability-word decode including the innate bit and the
+equipment source bits, an editing surface that is one validated JSON document
+rather than a widget per field, and a written format specification.
+
+The name tables here are generated from the upstream enums by
+`tools/gen_tables.py`, and the generator honors four things a positional parse
+gets wrong: hex `= 0x1d` anchors, stacked attributes, multi-argument
+attributes, and a final member with no trailing comma. Getting the first of
+those wrong silently shifts every command id past `Attack`.
 
 Difficulty behavior is documented from
 [khwiki](https://www.khwiki.com/Difficulty_Level).
