@@ -34,6 +34,7 @@ const usage = `kh3save: offline save tools for Kingdom Hearts III (PC)
   kh3save diff      <a> <b>                byte diff of two saves
   kh3save rekey     <save>... -to <id>     move a save between accounts
   kh3save convert   <save>... -to <form>   pc <-> plain (console) container
+  kh3save schema    [-json]                every editable field, and its range
 
 Anywhere a <save> or <dir> is accepted, a .zip backup of a KINGDOM HEARTS III
 folder works too, and so does one save inside it:
@@ -94,6 +95,8 @@ func main() {
 		err = cmdRekey(rest)
 	case "convert":
 		err = cmdConvert(rest)
+	case "schema":
+		err = cmdSchema(rest)
 	case "gui":
 		f := flag.NewFlagSet("gui", flag.ExitOnError)
 		noBrowser := f.Bool("no-browser", false, "print the URL instead of opening a browser")
@@ -373,6 +376,26 @@ func printLong(p []byte) {
 		fmt.Printf("  story        %s\n", strings.Join(flags, ", "))
 	}
 
+	printRecords(p)
+
+	var chains []string
+	for i := 0; i < kh3.KeychainUpgradeCount; i++ {
+		if v := kh3.GetKeychainUpgrade(p, i); v != 0 {
+			chains = append(chains, fmt.Sprintf("%d:%d", i, v))
+		}
+	}
+	if len(chains) > 0 {
+		fmt.Printf("  keychains    %s\n", strings.Join(chains, ", "))
+	}
+
+	// map_path and map_spawn are already in the default output; the other two
+	// read empty in every sample save, so they only appear when they are not.
+	for _, sf := range kh3.StringFields[2:] {
+		if v := kh3.GetString(p, sf); v != "" {
+			fmt.Printf("  %-12s %s\n", sf.Name, v)
+		}
+	}
+
 	for ci := range kh3.CharNames {
 		var worn []string
 		for _, k := range kh3.EquipKinds {
@@ -389,6 +412,78 @@ func printLong(p []byte) {
 			kh3.GetStat(p, ci, kh3.StatHP), kh3.GetStat(p, ci, kh3.StatMP),
 			strings.Join(worn, ", "))
 	}
+}
+
+// printRecords shows the use counters every save carries and, where the save
+// is long enough to hold them, the bests that go with them. A save that stops
+// before that block says nothing rather than printing a screen of zeros.
+func printRecords(p []byte) {
+	full := kh3.HasRecords(p)
+
+	for _, r := range []struct {
+		label string
+		count int
+		names map[int]string
+		uses  func([]byte, int) int
+		best  func([]byte, int) int
+	}{
+		{"attractions", kh3.AttractionUseCount, kh3.RecordAttractions, kh3.GetAttractionUse,
+			func(p []byte, i int) int { return int(kh3.GetAttractionHigh(p, i)) }},
+		{"shotlocks", kh3.ShotlockUseCount, kh3.RecordShotlocks, kh3.GetShotlockUse,
+			kh3.GetShotlockHigh},
+	} {
+		var out []string
+		for id := 0; id < r.count; id++ {
+			n := r.uses(p, id)
+			if n == 0 {
+				continue
+			}
+			line := fmt.Sprintf("%s x%d", lookupName(r.names, id), n)
+			if full {
+				if best := r.best(p, id); best != 0 {
+					line += fmt.Sprintf(" (best %d)", best)
+				}
+			}
+			out = append(out, line)
+		}
+		if len(out) > 0 {
+			fmt.Printf("  %-12s %s\n", r.label, strings.Join(out, ", "))
+		}
+	}
+
+	if !full {
+		return
+	}
+	var mini []string
+	for i, name := range kh3.RecordScores {
+		if v := kh3.GetRecordScore(p, i); v != 0 {
+			mini = append(mini, fmt.Sprintf("%s %d", name, v))
+		}
+	}
+	if len(mini) > 0 {
+		fmt.Printf("  minigames    %s\n", strings.Join(mini, ", "))
+	}
+	var flans []string
+	for i, name := range kh3.FlanNames {
+		f := kh3.GetFlan(p, i)
+		if f == (kh3.Flan{}) {
+			continue
+		}
+		flans = append(flans, fmt.Sprintf("%s %d/%d in %d", name, f.HighScore, f.HighScore2, f.Attempts))
+	}
+	if len(flans) > 0 {
+		fmt.Printf("  flans        %s\n", strings.Join(flans, ", "))
+	}
+	if n := kh3.GetPhotoMaxCount(p); n != 0 {
+		fmt.Printf("  album        holds %d photos\n", n)
+	}
+}
+
+func lookupName(t map[int]string, id int) string {
+	if n, ok := t[id]; ok {
+		return n
+	}
+	return fmt.Sprintf("#%d", id)
 }
 
 func commandList(p []byte, get func([]byte, int) int, count int) string {

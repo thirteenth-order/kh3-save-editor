@@ -473,7 +473,8 @@ func charactersSection() Section {
 			{
 				Key: "abilities", Label: "Abilities", Shape: "index",
 				Count: AbilityCount, IndexTable: "Abilities", Sparse: true,
-				Note: "entries reading " + hexOff(AbilityAbsent) + " are absent and are not dumped",
+				Note: "an entry reading 0x00000444 is absent and is not dumped; " +
+					"0x0000044B is what a difficulty-granted default reads as",
 				Entry: []Field{
 					{Key: "word", Label: "Word", Kind: KindWord, Bits: abilityWordBits},
 					{Key: "owned", Kind: KindDerv}, {Key: "equipped", Kind: KindDerv},

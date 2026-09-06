@@ -85,8 +85,8 @@ func BuildFull(o Options) []byte {
 
 	kh3.SetPartySlot(p, 0, 1)
 	kh3.SetPartySlot(p, 1, 2)
-	kh3.SetMagic(p, 0, 29)
-	kh3.SetLink(p, 0, 1)
+	kh3.SetMagic(p, 0, 29) // Fire
+	kh3.SetLink(p, 0, 70)  // Meow Wow Balloon
 	kh3.SetShortcut(p, 0, 0, 29)
 
 	// Every character gets one slot of each of the four equipment arrays. The
