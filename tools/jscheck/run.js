@@ -36,7 +36,20 @@ Object.defineProperty(loc, "hash", {
   },
 });
 
-Object.assign(globalThis, {
+// Object.assign throws on any global the runtime has made a getter-only
+// accessor, and node 21 did exactly that to `navigator`: the checks passed on
+// node 20 and failed on whatever the CI runner shipped. defineProperty
+// replaces the descriptor outright, so a stub lands whatever is already there.
+// The page only reads navigator.clipboard, and guards when it is absent.
+function defineGlobals(globals) {
+  for (const [name, value] of Object.entries(globals)) {
+    Object.defineProperty(globalThis, name, {
+      value: value, writable: true, configurable: true,
+    });
+  }
+}
+
+defineGlobals({
   document: doc,
   location: loc,
   navigator: {},
