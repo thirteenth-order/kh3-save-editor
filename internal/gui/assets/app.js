@@ -738,6 +738,7 @@ function folderPanel(canBrowse, dirs) {
     controls.append(browse);
   }
   controls.append(field);
+
   wrap.append(controls, msg);
   return wrap;
 }
@@ -995,19 +996,12 @@ function paintLibrary() {
   }
 
   if (!data.dirs || !data.dirs.length) {
+    // No third copy of the mark here. The sigil in the masthead and the rose
+    // turning behind it are already on screen, and a fresh install lands on
+    // this state -- which is exactly where the page should be saying what to
+    // do next, not showing the emblem a third time.
     const blank = el("div", "empty");
-    const art = el("div", "art");
-    const img = document.createElement("img");
-    img.src = EMBLEM;
-    img.alt = "";
-    const halo = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    halo.setAttribute("viewBox", "0 0 200 200");
-    halo.setAttribute("aria-hidden", "true");
-    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-    use.setAttribute("href", "#rose");
-    halo.append(use);
-    art.append(img, halo);
-    blank.append(art, el("h3", null, "No saves found yet"),
+    blank.append(el("h3", null, "No saves found yet"),
       el("p", null, "Checked Documents, OneDrive and the usual Proton prefixes. Point us at the folder once and it will be remembered."));
     app.append(blank, folderPanel(data.canBrowse, []));
     return;
