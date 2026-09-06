@@ -47,12 +47,21 @@ const (
 	ShortcutPages   = 3
 	ShortcutButtons = 4
 
-	// Magic and link slots hold Commands ids. What a slot *position* means is
-	// not settled: both sample saves are an hour and a half into Olympus and
-	// read Fire in slot 0 and Water in slot 1, which the game's own magic menu
-	// contradicts -- Water is not obtainable there. Slot 0 lands exactly on
-	// Fire, so the offset is right; the ordering is what is unexplained. These
-	// are reported and written as stored rather than relabelled to fit a guess.
+	// Magic and link slots hold Commands ids. MagicCount is 6 because Commands
+	// has exactly six magic families, each occupying four consecutive ids:
+	// Fire 29, Blizzard 33, Thunder 37, Water 41, Aero 45, Cure 49.
+	//
+	// All five sample saves read Fire in slot 0 and Water in slot 1 and nothing
+	// else, which is correct and was once mistaken for an anomaly: Sora starts
+	// with Fire and learns Water after the Darkside fight in the prologue,
+	// before Olympus, and the next spell he gets is Cure in Twilight Town, the
+	// world after. So a save anywhere in Olympus holds exactly these two.
+	//
+	// That rules out an array indexed by family -- Water would sit in slot 3 --
+	// and leaves a compact list of the spells known, at most one per family.
+	// Whether the order is acquisition order or a fixed menu order cannot be
+	// told from two entries that agree on both, so slots are still reported
+	// and written as stored.
 	MagicOff   = 0xBF50
 	MagicCount = 6
 	LinkOff    = 0xBF68
