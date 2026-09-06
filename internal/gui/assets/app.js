@@ -274,80 +274,15 @@ function difficultyPanel(slot, session, onSwapped) {
   return wrap;
 }
 /* -------------------------------------------------------------- details -- */
-// Everything the format layer knows about a save: a summary to read, a form
+// Everything the format layer knows about a save: a dashboard to read, a form
 // built out of the published schema to edit, and the document itself for the
 // bulk edits a form is bad at. All three are the same JSON the dump and patch
-// subcommands use, so none of them can validate differently from the CLI.
+// subcommands use, so none of them can validate differently from the CLI. The
+// dashboard is overview.js; the other two are below.
 //
-// Every value below reaches the DOM through textContent. Map paths and folder
-// names come out of the save file, so they are attacker-controlled text.
+// Every value reaches the DOM through textContent. Map paths and folder names
+// come out of the save file, so they are attacker-controlled text.
 
-// row renders one labelled line, or nothing when there is nothing to say.
-function row(label, text) {
-  if (!text) return null;
-  const n = el("div", "drow");
-  n.append(el("span", "dk", label), el("span", "dv", text));
-  return n;
-}
-
-// named joins the "name" of each entry of a dump section, in index order.
-function named(section, extra) {
-  if (!section) return "";
-  return Object.keys(section)
-    .sort(function (a, b) { return Number(a) - Number(b); })
-    .map(function (k) {
-      const ent = section[k];
-      return ent.name + (extra ? extra(ent) : "");
-    })
-    .join(", ");
-}
-
-// live drops the entries a save leaves at their empty value, so a fresh file
-// does not render six lines of "Empty, Empty, Empty".
-function live(section, isSet) {
-  if (!section) return {};
-  const out = {};
-  for (const k of Object.keys(section)) if (isSet(section[k])) out[k] = section[k];
-  return out;
-}
-
-function summary(doc) {
-  const wrap = el("div", "detail");
-  const h = doc.header || {};
-  const recs = doc.records || {};
-
-  const rows = [
-    row("world", h.world_logo_name),
-    row("location", h.location_name),
-    row("map", h.map_path),
-    row("spawn", h.map_spawn),
-    row("save icon", h.save_icon_name),
-    row("party", named(live(doc.party, function (e) { return e.id !== 0; }))),
-    row("magic", named(live(doc.magic, function (e) { return e.id !== 0; }))),
-    row("links", named(live(doc.links, function (e) { return e.id !== 0; }))),
-    row("materials", named(doc.materials, function (e) { return " ×" + e.count; })),
-    row("story", named(doc.story_flags, function (e) { return " " + e.value; })),
-    row("attractions", named(live(recs.attractions, function (e) { return e.uses > 0; }),
-      function (e) { return e.high_score ? " best " + e.high_score : ""; })),
-    row("shotlocks", named(recs.shotlocks, function (e) { return " ×" + e.uses; })),
-    row("crabs", h.crabs ? String(h.crabs) : ""),
-    row("enemies defeated", h.enemies_defeated ? String(h.enemies_defeated) : ""),
-  ];
-  for (const r of rows) if (r) wrap.append(r);
-
-  for (const name of Object.keys(doc.characters || {})) {
-    const c = doc.characters[name];
-    const worn = [];
-    for (const kind of ["weapons", "armor", "accessories", "items"]) {
-      const g = (c.equipment || {})[kind] || {};
-      for (const s of Object.keys(g).sort()) if (g[s]) worn.push(g[s].name);
-    }
-    if (!worn.length) continue;
-    const r = row(name, "hp " + c.hp + " mp " + c.mp + " · " + worn.join(", "));
-    if (r) wrap.append(r);
-  }
-  return wrap;
-}
 function clone(v) { return JSON.parse(JSON.stringify(v)); }
 
 function buildWorkbench(slot, loaded, session) {
@@ -374,7 +309,7 @@ function buildWorkbench(slot, loaded, session) {
 
   function rebuildOverview() {
     const pane = el("div", "pane");
-    pane.append(summary(state.doc));
+    pane.append(overview(slot, state.doc));
     return pane;
   }
 

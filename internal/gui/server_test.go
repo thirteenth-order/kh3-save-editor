@@ -309,7 +309,8 @@ func TestUIReadsOnlyKeysWeSend(t *testing.T) {
 	// The markup and the scripts are separate assets now, so scan all of them.
 	var page []byte
 	for _, name := range []string{"assets/index.html", "assets/ui.js", "assets/editor.js",
-		"assets/schema.js", "assets/forms.js", "assets/app.js"} {
+		"assets/schema.js", "assets/forms.js", "assets/overview.js",
+		"assets/app.js"} {
 		blob, err := assets.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)
@@ -930,7 +931,8 @@ func quote(s string) string {
 // other payload.
 func TestUIReadsOnlySchemaKeysWeSend(t *testing.T) {
 	var page []byte
-	for _, name := range []string{"assets/schema.js", "assets/forms.js", "assets/app.js"} {
+	for _, name := range []string{"assets/schema.js", "assets/forms.js",
+		"assets/overview.js", "assets/app.js"} {
 		blob, err := assets.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)

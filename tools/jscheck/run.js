@@ -24,7 +24,7 @@ const ctx = vm.createContext({
   fetch: async function () { return { ok: true, json: async function () { return {}; } }; },
 });
 
-for (const file of ["ui.js", "editor.js", "schema.js", "forms.js"]) {
+for (const file of ["ui.js", "editor.js", "schema.js", "forms.js", "overview.js"]) {
   vm.runInContext(fs.readFileSync(path.join(assets, file), "utf8"), ctx, { filename: file });
 }
 // loadSchema is the only thing here that talks to the server; hand it the
@@ -181,6 +181,51 @@ function ok(name, cond, extra) {
     gutter.some(function (n) { return n.classList.contains("err"); }));
   ok("the gutter marks a warning line",
     gutter.some(function (n) { return n.classList.contains("warn"); }));
+
+  /* --------------------------------------------------------- the dashboard */
+  // The dashboard reads a dump directly rather than through the schema walker,
+  // so a key it gets wrong renders nothing at all and no validator complains.
+  // Building it against the same fixture the format tests use is what catches
+  // that, and asserting on values rather than on node counts is what stops the
+  // check passing on an empty grid.
+
+  const board = get("overview")({ slot: "slot0", path: "/x", difficulty: 3 }, detail);
+  ok("the dashboard builds", !!board);
+  const seen = board.textContent;
+  const shows = function (what) { return seen.indexOf(what) > -1; };
+
+  for (const panel of ["Where", "Numbers", "Party", "Loadout", "Collection",
+                       "Records", "Story"]) {
+    ok("the dashboard draws the " + panel + " panel", shows(panel));
+  }
+
+  // Values out of the fixture, so an empty panel cannot pass as a full one.
+  ok("it reads the header", shows(detail.header.playtime) &&
+    shows(String(detail.header.level)));
+  const first = Object.keys(detail.characters)[0];
+  ok("it draws a character sheet", shows(first) &&
+    shows("HP " + detail.characters[first].hp));
+  ok("it names equipped gear",
+    shows(detail.characters[first].equipment.weapons["0"].name));
+  ok("it counts what the save holds",
+    shows(String(Object.keys(detail.materials).length)) || shows("held in total"));
+
+  // The provenance notes are the schema's words, not this file's, so the
+  // dashboard cannot claim more confidence than the format work does.
+  const loaded = get("SCHEMA");
+  const recSec = loaded.sections.filter(function (sec) { return sec.key === "records"; })[0];
+  ok("it carries the schema's note on the record block",
+    !!recSec.note && shows(recSec.note));
+
+  // The three header fields with a soft range are the only meters, and they
+  // are drawn from the schema rather than from numbers typed into the page.
+  const softs = loaded.sections
+    .filter(function (sec) { return sec.key === "header"; })[0].fields
+    .filter(function (f) { return f.softMax; });
+  ok("the schema still carries soft ranges to draw meters from", softs.length === 3);
+  const meters = [...board.walk()].filter(function (n) { return n.classList.contains("meter"); });
+  ok("a meter is drawn for level and for lucky emblems", meters.length === 2,
+    "got " + meters.length);
 
   console.log(fails ? "\n" + fails + " check(s) failed" : "\nall good");
   process.exit(fails ? 1 : 0);
