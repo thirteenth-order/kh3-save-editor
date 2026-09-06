@@ -528,6 +528,7 @@ No PS4 sample has been round-tripped through a real console yet.
 | 0x30 / 0x31 | u8 | Desire / Power choice |
 | 0x32 | u8 x5 | party |
 | 0x54 | u8 | location |
+| 0x58 | i64 | wall-clock time the save was written (UE4 `FDateTime` ticks) |
 | 0x60 / 0x68 | u8 | save icon / DLC save icon |
 | 0x70 | u32 | enemies defeated |
 | 0x5B8 | u16 | saves count |

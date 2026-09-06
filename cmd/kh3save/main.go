@@ -322,6 +322,9 @@ func cmdInfo(args []string) error {
 		fmt.Printf("  location     %d (%s)\n", h.Location, kh3.LocationName(int(h.Location)))
 		fmt.Printf("  saves %d   enemies defeated %d   crabs %d\n",
 			h.SavesCount, h.EnemiesDefeated, kh3.GetCrabs(l.plain))
+		if t := h.SavedAtString(); t != "" {
+			fmt.Printf("  written      %s\n", t)
+		}
 		fmt.Printf("  bonuses      hp %d mp %d str %d mag %d def %d\n",
 			h.BonusHP, h.BonusMP, h.BonusStrength, h.BonusMagic, h.BonusDefense)
 		fmt.Printf("  map          %s  @ %s\n", h.MapPath, h.MapSpawn)

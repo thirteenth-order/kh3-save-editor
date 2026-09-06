@@ -327,6 +327,15 @@ func headerSchema() []Field {
 		out = append(out, Field{Key: d.key, Label: d.label, Kind: KindDerv,
 			SlotOnly: true, Note: "derived from " + d.from + "; ignored on patch"})
 	}
+	// Read-only for a reason the format forces: the value is an int64 tick
+	// count too large for a double to hold exactly, and a document that makes
+	// the round trip through a browser's JSON would come back rounded. Making
+	// it editable means a string-typed field, not an int one.
+	out = append(out, Field{Key: "saved_at", Label: "Written at", Kind: KindDerv,
+		SlotOnly: true, Offset: hexOff(SavedAtOff),
+		Note: "wall-clock time the game wrote the save, UTC; an int64 of 100ns " +
+			"ticks since 0001-01-01 (UE4 FDateTime). Empty if the save carries " +
+			"none. Reported, never written"})
 	return out
 }
 

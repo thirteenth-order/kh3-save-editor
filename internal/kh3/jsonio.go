@@ -37,6 +37,7 @@ const DocFormat = "kh3-save-editor/1"
 var derivedHeader = map[string]bool{
 	"playtime": true, "world_logo_name": true,
 	"location_name": true, "save_icon_name": true,
+	"saved_at": true,
 }
 
 // ReadonlyHeader fields would break the container if rewritten, and the
@@ -187,6 +188,7 @@ func Dump(plain []byte, account string, characters int) ([]byte, error) {
 			h.set(sf.Name, GetString(plain, sf))
 		}
 		h.set("playtime", ReadHeader(plain).Playtime())
+		h.set("saved_at", ReadHeader(plain).SavedAtString())
 		h.set("world_logo_name", WorldName(int(plain[0x18])))
 		h.set("location_name", LocationName(int(plain[0x54])))
 		h.set("save_icon_name", IconName(int(plain[0x60])))
