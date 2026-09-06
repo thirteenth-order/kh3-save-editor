@@ -291,6 +291,8 @@ function buildWorkbench(slot, loaded, session) {
     // the editor must say so rather than offering controls that fail on write.
     caps: { records: !!(loaded.records && loaded.records.minigames) },
     dirty: false,
+    // Path -> open, remembered across the rebuilds a tab switch causes.
+    folds: new Map(),
   };
   // The difficulty swap writes the file directly, so it has to know
   // whether there is unsaved work in here before it does.
@@ -316,6 +318,9 @@ function buildWorkbench(slot, loaded, session) {
     pane.append(buildForm({
       doc: state.doc,
       caps: state.caps,
+      // Which folds are open belongs to the session, not to the form: the
+      // form is rebuilt from the document every time this tab is shown.
+      folds: state.folds,
       edited: function () { state.dirty = true; check(); },
     }));
     return pane;

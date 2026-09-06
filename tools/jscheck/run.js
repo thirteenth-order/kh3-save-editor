@@ -197,7 +197,10 @@ function ok(name, cond, extra) {
   /* ------------------------------------------------------- the form itself */
 
   let edits = 0;
-  const state = { doc: JSON.parse(JSON.stringify(detail)), caps: caps, edited: function () { edits++; } };
+  const state = {
+    doc: JSON.parse(JSON.stringify(detail)), caps: caps,
+    folds: new Map(), edited: function () { edits++; },
+  };
   const form = get("buildForm")(state);
   const drawn = schema.sections.filter(function (s) { return state.doc[s.key] !== undefined; }).length;
   const heads = [...form.walk()].filter(function (n) { return n.classList.contains("fold-head"); });
@@ -235,6 +238,31 @@ function ok(name, cond, extra) {
   ok("the document still validates after the form has written to it",
     validate(state.doc, caps).length === 0,
     JSON.stringify(validate(state.doc, caps).slice(0, 5)));
+
+  // Every tab switch rebuilds this form from the document, so the folds the
+  // reader opened have to survive it. They live in state.folds for that
+  // reason, and this is the check that says so.
+  const openBefore = state.folds.size;
+  ok("opening folds is recorded somewhere that outlives the form",
+    openBefore > 40, "recorded " + openBefore);
+
+  const again = get("buildForm")(state);
+  const reopened = [...again.walk()].filter(function (n) {
+    return n.classList.contains("fold") && n.classList.contains("open");
+  }).length;
+  ok("a rebuilt form comes back with those folds still open",
+    reopened > 40, "reopened " + reopened);
+
+  // And a fold that was deliberately closed stays closed, which is the half a
+  // plain "remember what was opened" set would get wrong. The header is the
+  // one fold that starts open, so it is the one that can prove it.
+  state.folds.set("/header", false);
+  const third = get("buildForm")(state);
+  const header = [...third.walk()].filter(function (n) {
+    return n.classList.contains("fold");
+  })[0];
+  ok("a fold that was closed on purpose stays closed",
+    !!header && !header.classList.contains("open"));
 
   /* --------------------------------------------------------- the code box */
 

@@ -192,7 +192,16 @@ function entryRef(owner, index, key) {
   };
 }
 
-function collapsible(title, sub, build, open) {
+// A fold, and the memory of whether it was open.
+//
+// The form is rebuilt from the document every time the Fields tab is shown,
+// which used to slam roughly two hundred folds shut on the way back from
+// reading the Document tab. ctx.folds is a Map from path to open state, held
+// by the workbench rather than by the form, so it outlives the rebuild. A
+// path nobody has touched is not in the map at all, which is what keeps
+// "never opened" distinct from "deliberately closed" and lets the header
+// still be open the first time and stay shut once it has been closed.
+function collapsible(ctx, at, title, sub, build, open) {
   const box = el("section", "fold");
   const head = el("button", "fold-head");
   head.type = "button";
@@ -203,14 +212,25 @@ function collapsible(title, sub, build, open) {
   const body = el("div", "fold-body");
   body.hidden = true;
   let built = false;
-  head.onclick = function () {
+  head.onclick = function (remembering) {
     if (!built) { body.append(build()); built = true; }
     body.hidden = !body.hidden;
     box.classList.toggle("open", !body.hidden);
+    // Restoring is not a click, so it must not record one: the argument is
+    // there to tell the two apart.
+    if (ctx.folds && remembering !== true) ctx.folds.set(at, !body.hidden);
   };
   box.append(head, body);
-  if (open) head.onclick();
+  const remembered = ctx.folds ? ctx.folds.get(at) : undefined;
+  if (remembered === undefined ? open : remembered) head.onclick(true);
   return box;
+}
+
+// under names a child of the current path. Sections nest, and two of them can
+// carry the same key under different parents -- equipment sits inside every
+// character -- so the whole path is the identity and not the last segment.
+function under(ctx, key) {
+  return (ctx.at || "") + "/" + key;
 }
 
 // section dispatches on shape. ctx carries the edit callback and the save's
@@ -248,8 +268,8 @@ function objectNode(sec, value, ctx) {
   wrap.append(grid);
   for (const sub of sec.sections || []) {
     if (value[sub.key] === undefined) continue;
-    wrap.append(collapsible(sub.label || sub.key, "", function () {
-      return sectionNode(sub, value[sub.key], ctx);
+    wrap.append(collapsible(ctx, under(ctx, sub.key), sub.label || sub.key, "", function () {
+      return sectionNode(sub, value[sub.key], { ...ctx, at: under(ctx, sub.key) });
     }));
   }
   return withNote(sec, wrap);
@@ -259,8 +279,8 @@ function groupNode(sec, value, ctx) {
   const wrap = el("div");
   for (const sub of sec.sections || []) {
     if (value[sub.key] === undefined && sub.requires !== "records") continue;
-    wrap.append(collapsible(sub.label || sub.key, "", function () {
-      return sectionNode(sub, value[sub.key] || {}, ctx);
+    wrap.append(collapsible(ctx, under(ctx, sub.key), sub.label || sub.key, "", function () {
+      return sectionNode(sub, value[sub.key] || {}, { ...ctx, at: under(ctx, sub.key) });
     }));
   }
   return withNote(sec, wrap);
@@ -270,8 +290,8 @@ function namesNode(sec, value, ctx) {
   const wrap = el("div");
   for (const key of sec.keys) {
     if (value[key] === undefined) continue;
-    wrap.append(collapsible(key, entrySummary(sec, value[key]), function () {
-      return entryNode(sec, value[key], ctx);
+    wrap.append(collapsible(ctx, under(ctx, key), key, entrySummary(sec, value[key]), function () {
+      return entryNode(sec, value[key], { ...ctx, at: under(ctx, key) });
     }));
   }
   return withNote(sec, wrap);
@@ -291,8 +311,8 @@ function entryNode(sec, ent, ctx) {
   if (grid.children.length) wrap.append(grid);
   for (const sub of sec.sections || []) {
     if (ent[sub.key] === undefined) continue;
-    wrap.append(collapsible(sub.label || sub.key, "", function () {
-      return sectionNode(sub, ent[sub.key], ctx);
+    wrap.append(collapsible(ctx, under(ctx, sub.key), sub.label || sub.key, "", function () {
+      return sectionNode(sub, ent[sub.key], { ...ctx, at: under(ctx, sub.key) });
     }));
   }
   return wrap;
@@ -568,14 +588,14 @@ function defaultEntry(sec) {
 // of layout for the sake of controls nobody has scrolled to.
 export function buildForm(state) {
   const wrap = el("div", "form");
-  const ctx = { edited: state.edited, caps: state.caps };
+  const ctx = { edited: state.edited, caps: state.caps, folds: state.folds, at: "" };
   for (const sec of SCHEMA.sections) {
     const value = state.doc[sec.key];
     if (value === undefined) continue;
     const count = value && typeof value === "object" ? Object.keys(value).length : 0;
-    wrap.append(collapsible(sec.label || sec.key,
+    wrap.append(collapsible(ctx, under(ctx, sec.key), sec.label || sec.key,
       count ? count + (count === 1 ? " entry" : " entries") : "",
-      function () { return sectionNode(sec, value, ctx); },
+      function () { return sectionNode(sec, value, { ...ctx, at: under(ctx, sec.key) }); },
       sec.key === "header"));
   }
   return wrap;
