@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,7 +17,35 @@ import (
 	"github.com/thirteenth-order/kh3-save-editor/internal/kh3"
 )
 
+// version is stamped by the release build, which passes
+// -ldflags "-X main.version=vX.Y.Z". Nothing else sets it.
 var version = "dev"
+
+// buildVersion is what `kh3save version` prints.
+//
+// `go install github.com/.../cmd/kh3save@latest` is one of the two install
+// routes the README offers, and it passes no ldflags, so a binary installed
+// that way reported "dev" and gave the one person most likely to be filing a
+// bug no way to say which build they were on. The toolchain already records
+// the module version it built from, so ask for that when the ldflag is absent.
+//
+// The release build, the Makefile and the Docker build all stamp the ldflag,
+// so none of them reach the fallback. What does reach it is a bare `go build`,
+// where Go records a pseudo-version off the commit -- v0.0.0-<date>-<sha>, and
+// +dirty for an edited tree. That is longer than "dev" and strictly more
+// useful in a bug report, so it is kept rather than flattened back.
+// "(devel)" is guarded for anyway: it is what Go records when it has no VCS
+// data to work from, and it says less than "dev" does.
+func buildVersion() string {
+	if version != "dev" {
+		return version
+	}
+	bi, ok := debug.ReadBuildInfo()
+	if !ok || bi.Main.Version == "" || bi.Main.Version == "(devel)" {
+		return version
+	}
+	return bi.Main.Version
+}
 
 const usage = `kh3save: offline save tools for Kingdom Hearts III (PC)
 
@@ -113,7 +142,7 @@ func main() {
 			err = gui.Serve(*noBrowser, *addr)
 		}
 	case "version", "-v", "--version":
-		fmt.Println("kh3save", version)
+		fmt.Println("kh3save", buildVersion())
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:

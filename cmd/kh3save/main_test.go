@@ -219,3 +219,30 @@ func TestConvertToPlainWritesTheConsoleLength(t *testing.T) {
 		t.Error("the round trip did not survive as a slot")
 	}
 }
+
+// A release build stamps main.version with -ldflags; `go install pkg@version`
+// stamps nothing and reported "dev", which is the wrong answer for the install
+// route the README recommends and the one a bug report is most likely to come
+// from. The fallback reads what the toolchain recorded instead.
+func TestBuildVersionPrefersTheStampAndFallsBack(t *testing.T) {
+	saved := version
+	t.Cleanup(func() { version = saved })
+
+	// A stamped release build wins outright, and must not be second-guessed by
+	// whatever the build info happens to say.
+	version = "v9.9.9"
+	if got := buildVersion(); got != "v9.9.9" {
+		t.Errorf("buildVersion() = %q, want the ldflag value v9.9.9", got)
+	}
+
+	// Unstamped: never empty, and never the literal Go uses for a working-tree
+	// build, which carries no version worth printing.
+	version = "dev"
+	got := buildVersion()
+	if got == "" {
+		t.Error("buildVersion() is empty; version output would read \"kh3save \"")
+	}
+	if got == "(devel)" {
+		t.Error("buildVersion() leaked Go's placeholder instead of saying dev")
+	}
+}
