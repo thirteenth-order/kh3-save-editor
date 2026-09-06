@@ -162,6 +162,15 @@ else that Critical changes (damage taken, EXP rate, MP charge time, situation
 command build-up, AP) is a runtime multiplier the game derives from the flag
 by itself.
 
+There is a fourth byte that differs, and `swap` deliberately leaves it: the
+`u32` at `0x10` reads `0x88000001` on Standard and `0x08000001` on Critical.
+It is not part of the change because the sample saves cannot say whether it
+means "the current difficulty is below Critical", which `swap` should write, or
+"this playthrough has been below Critical", which `swap` would be fabricating.
+Leaving it costs nothing: a save swapped without it loads, plays and re-saves,
+and the game writes the byte itself. That is not a guess -- it is where two of
+the sample saves came from.
+
 | | Beginner | Standard | Proud | Critical |
 | :-- | :-: | :-: | :-: | :-: |
 | Damage taken | 0.5x | 1x | 1.5x | 2x + 10 |
