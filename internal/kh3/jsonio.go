@@ -30,6 +30,15 @@ func AbilityName(id int) string {
 // meant for something else.
 const DocFormat = "kh3-save-editor/1"
 
+// derivedHeader keys are rendered by Dump out of a number that is already in
+// the document, so patching them back would either be a no-op or a fight with
+// the field they came from. They are accepted and ignored, which is what makes
+// "dump, change one number, patch the whole thing back" work.
+var derivedHeader = map[string]bool{
+	"playtime": true, "world_logo_name": true,
+	"location_name": true, "save_icon_name": true,
+}
+
 // ReadonlyHeader fields would break the container if rewritten, and the
 // checksum is recomputed on save anyway.
 var ReadonlyHeader = map[string]bool{
@@ -171,12 +180,13 @@ func Dump(plain []byte, account string, characters int) ([]byte, error) {
 		h.set(f.name, readField(plain, f.off, f.kind))
 	}
 	if slot {
-		hdr := ReadHeader(plain)
-		h.set("playtime", hdr.Playtime())
-		h.set("map_path", hdr.MapPath)
-		h.set("map_spawn", hdr.MapSpawn)
-	}
-	if slot {
+		// The four NUL-terminated fields, then the values derived from
+		// numbers already above. Patch reads the first group and ignores the
+		// second; the schema says which is which.
+		for _, sf := range StringFields {
+			h.set(sf.Name, GetString(plain, sf))
+		}
+		h.set("playtime", ReadHeader(plain).Playtime())
 		h.set("world_logo_name", WorldName(int(plain[0x18])))
 		h.set("location_name", LocationName(int(plain[0x54])))
 		h.set("save_icon_name", IconName(int(plain[0x60])))
@@ -189,6 +199,7 @@ func Dump(plain []byte, account string, characters int) ([]byte, error) {
 		doc.set("magic", dumpCommandArray(plain, GetMagic, MagicCount))
 		doc.set("links", dumpCommandArray(plain, GetLink, LinkCount))
 		doc.set("story_flags", dumpStoryFlags(plain))
+		doc.set("keychain_upgrades", dumpKeychain(plain))
 		doc.set("records", dumpRecords(plain))
 	}
 
@@ -321,28 +332,84 @@ func dumpStoryFlags(p []byte) *ordered {
 	return out
 }
 
+// dumpKeychain reports all 24 entries, zeros included. The offset is the one
+// in this program with no confirmation and it reads 0 everywhere, so hiding
+// the zeros would leave nothing at all and nobody able to tell whether the
+// field was checked or missing.
+func dumpKeychain(p []byte) *ordered {
+	out := newOrdered()
+	for i := 0; i < KeychainUpgradeCount; i++ {
+		e := newOrdered()
+		e.set("value", GetKeychainUpgrade(p, i))
+		out.set(strconv.Itoa(i), e)
+	}
+	return out
+}
+
+// dumpRecords renders the use counters, which every save carries, and the
+// bests, which live in a block a short synthetic save does not reach. The two
+// are kept in one section because they describe the same five attractions and
+// the same thirty shotlocks, and splitting them would mean naming both twice.
 func dumpRecords(p []byte) *ordered {
+	full := HasRecords(p)
+
 	att := newOrdered()
 	for id := 0; id < AttractionUseCount; id++ {
 		e := newOrdered()
 		e.set("uses", GetAttractionUse(p, id))
+		if full {
+			e.set("high_score", GetAttractionHigh(p, id))
+		}
 		e.set("name", lookup(RecordAttractions, id))
 		att.set(strconv.Itoa(id), e)
 	}
+
 	shot := newOrdered()
 	for id := 0; id < ShotlockUseCount; id++ {
 		n := GetShotlockUse(p, id)
-		if n == 0 {
+		hi := 0
+		if full {
+			hi = GetShotlockHigh(p, id)
+		}
+		if n == 0 && hi == 0 {
 			continue
 		}
 		e := newOrdered()
 		e.set("uses", n)
+		if full {
+			e.set("high_score", hi)
+		}
 		e.set("name", lookup(RecordShotlocks, id))
 		shot.set(strconv.Itoa(id), e)
 	}
+
 	out := newOrdered()
 	out.set("attractions", att)
 	out.set("shotlocks", shot)
+	if !full {
+		return out
+	}
+
+	mini := newOrdered()
+	for i, n := range RecordScores {
+		mini.set(n, GetRecordScore(p, i))
+	}
+	out.set("minigames", mini)
+
+	flans := newOrdered()
+	for i, n := range FlanNames {
+		f := GetFlan(p, i)
+		e := newOrdered()
+		e.set("high_score", f.HighScore)
+		e.set("high_score_2", f.HighScore2)
+		e.set("attempts", f.Attempts)
+		flans.set(n, e)
+	}
+	out.set("flans", flans)
+
+	album := newOrdered()
+	album.set("photo_max_count", GetPhotoMaxCount(p))
+	out.set("album", album)
 	return out
 }
 
@@ -438,7 +505,31 @@ func Patch(plain, doc []byte) ([]byte, []string, error) {
 		for _, key := range sortedKeys(hdr) {
 			f, ok := byName[key]
 			if !ok {
-				continue // display-only keys such as playtime / map_path
+				// The three other things a header key can be: one of the
+				// NUL-terminated fields, one of the values Dump derives from a
+				// number that is already here, or a typo. The first is written,
+				// the second is skipped because rewriting it would fight the
+				// field it came from, and the third is now an error -- silently
+				// dropping an unrecognized key is how a document quietly does
+				// nothing and nobody finds out until the save is loaded.
+				if sf, isText := StringFieldByName(key); isText {
+					sv, isStr := hdr[key].(string)
+					if !isStr {
+						return nil, nil, fmt.Errorf("header.%s must be a string", key)
+					}
+					old := GetString(out, sf)
+					if err := SetString(out, sf, sv); err != nil {
+						return nil, nil, fmt.Errorf("header.%s: %w", key, err)
+					}
+					if old != sv {
+						changes = append(changes, fmt.Sprintf("header.%s: %q -> %q", key, old, sv))
+					}
+					continue
+				}
+				if derivedHeader[key] {
+					continue
+				}
+				return nil, nil, fmt.Errorf("unknown key header.%s", key)
 			}
 			nv, err := asInt(hdr[key])
 			if err != nil {
@@ -736,44 +827,26 @@ var patchSections = []struct {
 		}
 		return ch, nil
 	}},
-	{"records", func(out []byte, m map[string]any) ([]string, error) {
+	{"keychain_upgrades", func(out []byte, m map[string]any) ([]string, error) {
+		idx, err := indexKeys(m, KeychainUpgradeCount, "keychain_upgrades")
+		if err != nil {
+			return nil, err
+		}
 		var ch []string
-		for _, r := range []struct {
-			key   string
-			off   int
-			count int
-			names map[int]string
-		}{
-			{"attractions", AttractionUseOff, AttractionUseCount, RecordAttractions},
-			{"shotlocks", ShotlockUseOff, ShotlockUseCount, RecordShotlocks},
-		} {
-			raw, ok := m[r.key]
-			if !ok {
-				continue
-			}
-			sub, ok := raw.(map[string]any)
-			if !ok {
-				return nil, fmt.Errorf("records.%s must be an object", r.key)
-			}
-			idx, err := indexKeys(sub, r.count, "records."+r.key)
+		for _, i := range idx {
+			v, err := scalar(m[strconv.Itoa(i)], "value")
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("keychain_upgrades.%d: %w", i, err)
 			}
-			for _, id := range idx {
-				v, err := scalar(sub[strconv.Itoa(id)], "uses")
-				if err != nil {
-					return nil, fmt.Errorf("records.%s.%d: %w", r.key, id, err)
-				}
-				old := GetU16Array(out, r.off, r.count, id)
-				SetU16Array(out, r.off, r.count, id, int(v))
-				if now := GetU16Array(out, r.off, r.count, id); old != now {
-					ch = append(ch, fmt.Sprintf("records.%s %d %s: %d -> %d",
-						r.key, id, lookup(r.names, id), old, now))
-				}
+			old := GetKeychainUpgrade(out, i)
+			SetKeychainUpgrade(out, i, int(v))
+			if now := GetKeychainUpgrade(out, i); old != now {
+				ch = append(ch, fmt.Sprintf("keychain_upgrades.%d: %d -> %d", i, old, now))
 			}
 		}
 		return ch, nil
 	}},
+	{"records", patchRecords},
 }
 
 func commandArrayPatch(name string, count int, get func([]byte, int) int,
@@ -975,4 +1048,193 @@ func sortedKeys(m map[string]any) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// patchRecords applies the use counters, which every save carries, and the
+// bests, which live past the point a short save reaches. Asking for a best on
+// a save that stops before the block is an error naming the reason, not a
+// write into whatever happens to be at that address.
+func patchRecords(out []byte, m map[string]any) ([]string, error) {
+	var ch []string
+	full := HasRecords(out)
+
+	need := func(what string) error {
+		if full {
+			return nil
+		}
+		return fmt.Errorf("records.%s needs the record block, and this save is only %d bytes: "+
+			"it stops before %s", what, len(out), hexOff(RecordsOff))
+	}
+
+	for _, r := range []struct {
+		key     string
+		off     int
+		count   int
+		names   map[int]string
+		getUse  func([]byte, int) int
+		setUse  func([]byte, int, int)
+		getBest func([]byte, int) int
+		setBest func([]byte, int, int)
+	}{
+		{"attractions", AttractionUseOff, AttractionUseCount, RecordAttractions,
+			GetAttractionUse, SetAttractionUse,
+			func(p []byte, i int) int { return int(GetAttractionHigh(p, i)) },
+			func(p []byte, i, v int) { SetAttractionHigh(p, i, int32(v)) }},
+		{"shotlocks", ShotlockUseOff, ShotlockUseCount, RecordShotlocks,
+			GetShotlockUse, SetShotlockUse, GetShotlockHigh, SetShotlockHigh},
+	} {
+		raw, ok := m[r.key]
+		if !ok {
+			continue
+		}
+		sub, ok := raw.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("records.%s must be an object", r.key)
+		}
+		idx, err := indexKeys(sub, r.count, "records."+r.key)
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range idx {
+			entry, isObj := sub[strconv.Itoa(id)].(map[string]any)
+			where := fmt.Sprintf("records.%s.%d", r.key, id)
+			// A bare number is the use count, the same way a bare number is
+			// the count everywhere else a dump writes one.
+			if !isObj {
+				entry = map[string]any{"uses": sub[strconv.Itoa(id)]}
+			}
+			if v, ok := entry["uses"]; ok {
+				n, err := asInt(v)
+				if err != nil {
+					return nil, fmt.Errorf("%s.uses: %w", where, err)
+				}
+				old := r.getUse(out, id)
+				r.setUse(out, id, int(n))
+				if now := r.getUse(out, id); old != now {
+					ch = append(ch, fmt.Sprintf("records.%s %d %s: %d -> %d uses",
+						r.key, id, lookup(r.names, id), old, now))
+				}
+			}
+			if v, ok := entry["high_score"]; ok {
+				if err := need(r.key); err != nil {
+					return nil, err
+				}
+				n, err := asInt(v)
+				if err != nil {
+					return nil, fmt.Errorf("%s.high_score: %w", where, err)
+				}
+				old := r.getBest(out, id)
+				r.setBest(out, id, int(n))
+				if now := r.getBest(out, id); old != now {
+					ch = append(ch, fmt.Sprintf("records.%s %d %s: best %d -> %d",
+						r.key, id, lookup(r.names, id), old, now))
+				}
+			}
+		}
+	}
+
+	if raw, ok := m["minigames"]; ok {
+		if err := need("minigames"); err != nil {
+			return nil, err
+		}
+		sub, ok := raw.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("records.minigames must be an object")
+		}
+		for _, key := range sortedKeys(sub) {
+			i := indexOfString(RecordScores, key)
+			if i < 0 {
+				return nil, fmt.Errorf("unknown key records.minigames.%s", key)
+			}
+			n, err := scalar(sub[key], "value")
+			if err != nil {
+				return nil, fmt.Errorf("records.minigames.%s: %w", key, err)
+			}
+			old := GetRecordScore(out, i)
+			SetRecordScore(out, i, int32(n))
+			if old != int32(n) {
+				ch = append(ch, fmt.Sprintf("records.minigames.%s: %d -> %d", key, old, n))
+			}
+		}
+	}
+
+	if raw, ok := m["flans"]; ok {
+		if err := need("flans"); err != nil {
+			return nil, err
+		}
+		sub, ok := raw.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("records.flans must be an object")
+		}
+		for _, key := range sortedKeys(sub) {
+			i := indexOfString(FlanNames, key)
+			if i < 0 {
+				return nil, fmt.Errorf("unknown flan %q", key)
+			}
+			e, ok := sub[key].(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("records.flans.%s must be an object", key)
+			}
+			old := GetFlan(out, i)
+			f := old
+			for _, fld := range []struct {
+				key string
+				set func(*Flan, int32)
+			}{
+				{"high_score", func(x *Flan, v int32) { x.HighScore = v }},
+				{"high_score_2", func(x *Flan, v int32) { x.HighScore2 = v }},
+				{"attempts", func(x *Flan, v int32) { x.Attempts = v }},
+			} {
+				v, ok := e[fld.key]
+				if !ok {
+					continue
+				}
+				n, err := asInt(v)
+				if err != nil {
+					return nil, fmt.Errorf("records.flans.%s.%s: %w", key, fld.key, err)
+				}
+				fld.set(&f, int32(n))
+			}
+			SetFlan(out, i, f)
+			if old != f {
+				ch = append(ch, fmt.Sprintf("records.flans.%s: %d/%d/%d -> %d/%d/%d", key,
+					old.HighScore, old.HighScore2, old.Attempts,
+					f.HighScore, f.HighScore2, f.Attempts))
+			}
+		}
+	}
+
+	if raw, ok := m["album"]; ok {
+		if err := need("album"); err != nil {
+			return nil, err
+		}
+		sub, ok := raw.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("records.album must be an object")
+		}
+		for _, key := range sortedKeys(sub) {
+			if key != "photo_max_count" {
+				return nil, fmt.Errorf("unknown key records.album.%s", key)
+			}
+			n, err := asInt(sub[key])
+			if err != nil {
+				return nil, fmt.Errorf("records.album.%s: %w", key, err)
+			}
+			old := GetPhotoMaxCount(out)
+			SetPhotoMaxCount(out, int32(n))
+			if old != int32(n) {
+				ch = append(ch, fmt.Sprintf("records.album.photo_max_count: %d -> %d", old, n))
+			}
+		}
+	}
+	return ch, nil
+}
+
+func indexOfString(list []string, want string) int {
+	for i, v := range list {
+		if v == want {
+			return i
+		}
+	}
+	return -1
 }
