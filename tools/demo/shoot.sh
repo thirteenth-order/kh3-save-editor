@@ -114,11 +114,11 @@ want=${*:-saves summary fields json}
 for name in $want; do
 	case $name in
 	saves) shot saves 1010 "" ;;
-	summary) shot summary 1800 "#slot=0&tab=overview&reveal=party,story" ;;
+	summary) shot summary 1800 "#slot=0&tab=overview&reveal=party,story_flags" ;;
 	# Down to the accessory slots, because the type-byte picker is the clearest
 	# thing the schema-driven form does and it is four folds deep.
-	fields) shot fields 1760 \
-		"#slot=0&tab=edit&shut=header&open=characters,characters/Sora,characters/Sora/equipment,characters/Sora/equipment/accessories" ;;
+	fields) shot fields 1830 \
+		"#slot=0&tab=edit&shut=header&reveal=characters&open=characters,characters/Sora,characters/Sora/equipment,characters/Sora/equipment/accessories" ;;
 	json) shot json 1320 "#slot=0&tab=json" ;;
 	*)
 		echo "no such shot: $name" >&2

@@ -94,6 +94,17 @@ type Section struct {
 	// "records": the synthetic saves the tests build stop before that block.
 	Requires string `json:"requires,omitempty"`
 
+	// Spoils is the warning to show over a region whose contents say what is
+	// ahead of the player rather than what is behind them -- who they will
+	// travel with, which worlds there are. Non-empty means an interface should
+	// cover it until asked, and the text is what it should say.
+	//
+	// It lives here rather than in the page because two views render these
+	// regions and a third prints them, and a list of "the spoilery ones" kept
+	// in one of them would go stale the moment a section moved. This is the
+	// same reason the ranges and the provenance notes are here.
+	Spoils string `json:"spoils,omitempty"`
+
 	Fields   []Field   `json:"fields,omitempty"`   // object shape
 	Entry    []Field   `json:"entry,omitempty"`    // index / names shape
 	Sections []Section `json:"sections,omitempty"` // group shape
@@ -352,8 +363,9 @@ func Sections() []Section {
 		{Key: "header", Label: "Header", Shape: "object", Fields: headerSchema()},
 		{
 			Key: "party", Label: "Party", Shape: "index", Count: PartySlots,
-			Note:  "Sora is not in here; the array holds who stands beside him",
-			Entry: []Field{{Key: "id", Label: "Character", Kind: KindEnum, Table: "PartyCharacters"}, {Key: "name", Kind: KindDerv}},
+			Note:   "Sora is not in here; the array holds who stands beside him",
+			Spoils: "Names who is travelling with Sora in this save, and the picker lists every character who ever can.",
+			Entry:  []Field{{Key: "id", Label: "Character", Kind: KindEnum, Table: "PartyCharacters"}, {Key: "name", Kind: KindDerv}},
 		},
 		{
 			Key: "shortcuts", Label: "Shortcuts", Shape: "index", Count: ShortcutPages,
@@ -368,7 +380,8 @@ func Sections() []Section {
 		{
 			Key: "story_flags", Label: "Story progress", Shape: "index",
 			Count: StoryFlagCount, IndexTable: "StoryFlags", Sparse: true,
-			Note: "each entry is a story-label number, not a boolean: it counts how far that world got",
+			Note:   "each entry is a story-label number, not a boolean: it counts how far that world got",
+			Spoils: "Names every world in the game, and how far this save has got through each one.",
 			Entry: []Field{{Key: "value", Label: "Progress", Kind: KindInt, Min: i32Min, Max: i32Max},
 				{Key: "name", Kind: KindDerv}},
 		},
@@ -480,7 +493,11 @@ func charactersSection() Section {
 		Key: "characters", Label: "Characters", Shape: "names", Keys: CharNames,
 		Note: "sixteen playable-character structs at " + hexOff(CharBase) +
 			", " + hexOff(CharSize) + " bytes apart",
-		Entry: stats,
+		// The struct array is fixed at sixteen whatever the save holds, so
+		// this names every playable character in the game and not merely the
+		// ones met so far.
+		Spoils: "Names all sixteen playable characters, met or not.",
+		Entry:  stats,
 		Sections: []Section{
 			aiSection(),
 			equip,

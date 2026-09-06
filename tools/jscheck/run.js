@@ -128,6 +128,7 @@ function ok(name, cond, extra) {
   mods = await Promise.all(["diffs.js", "ui.js", "editor.js", "schema.js",
                             "forms.js", "overview.js"].map(load));
   await get("loadSchema")();
+  const loadedSchema = get("SCHEMA");
   const validate = get("validate");
   const caps = { records: !!(detail.records && detail.records.minigames) };
 
@@ -227,17 +228,37 @@ function ok(name, cond, extra) {
   ok("one fold per section the save carries", heads.length === drawn,
     heads.length + " folds for " + drawn + " sections");
 
+  // A section the schema marks as spoiling is covered in the form too, and the
+  // form is where the whole party array and all sixteen character structs are
+  // laid out, so this is the view where covering matters most.
+  const spoiling = loadedSchema.sections.filter(function (sec) { return sec.spoils; });
+  ok("the schema marks the regions that spoil", spoiling.length === 3,
+    "marked " + spoiling.length);
+
   // Sections build their bodies on first open, so opening every one is the
-  // only way to run the code that draws it. Opening a fold reveals more.
+  // only way to run the code that draws it. Opening a fold reveals more, and
+  // a cover inside a fold only exists once that fold is open -- so both are
+  // driven in the same pass rather than one after the other.
   let opened = 0;
-  for (let pass = 0; pass < 8; pass++) {
+  let uncovered = 0;
+  for (let pass = 0; pass < 10; pass++) {
     for (const n of [...form.walk()]) {
-      if (!n.classList.contains("fold-head") || n.opened) continue;
-      n.opened = true;
-      n.onclick();
-      opened++;
+      if (n.done) continue;
+      if (n.classList.contains("fold-head")) {
+        n.done = true;
+        n.onclick();
+        opened++;
+        continue;
+      }
+      if (n.classList.contains("pill") && n.textContent.indexOf("Show anyway") > -1) {
+        n.done = true;
+        n.onclick();
+        uncovered++;
+      }
     }
   }
+  ok("the form covers every region the schema marks", uncovered === spoiling.length,
+    "covered " + uncovered + " of " + spoiling.length);
   ok("every section body builds (" + opened + " folds)", opened > 40);
 
   const nodes = [...form.walk()];
@@ -346,14 +367,13 @@ function ok(name, cond, extra) {
 
   // The provenance notes are the schema's words, not this file's, so the
   // dashboard cannot claim more confidence than the format work does.
-  const loaded = get("SCHEMA");
-  const recSec = loaded.sections.filter(function (sec) { return sec.key === "records"; })[0];
+  const recSec = loadedSchema.sections.filter(function (sec) { return sec.key === "records"; })[0];
   ok("it carries the schema's note on the record block",
     !!recSec.note && shows(recSec.note));
 
   // The three header fields with a soft range are the only meters, and they
   // are drawn from the schema rather than from numbers typed into the page.
-  const softs = loaded.sections
+  const softs = loadedSchema.sections
     .filter(function (sec) { return sec.key === "header"; })[0].fields
     .filter(function (f) { return f.softMax; });
   ok("the schema still carries soft ranges to draw meters from", softs.length === 3);

@@ -10,7 +10,7 @@
 // modules because the server hands every asset out under a path that carries
 // the run's token, so a relative import inherits it; see assetPrefix in
 // server.go for why the query string could not do that job.
-import { combo, el, icon, optionSwitch, pill, toast } from "./ui.js";
+import { combo, el, icon, optionSwitch, pill, spoiler, toast } from "./ui.js";
 import { SCHEMA, asNumber, table, tableName } from "./schema.js";
 
 // EMPTY_ENTRY says what "clear this" writes for each kind of section, because
@@ -236,10 +236,26 @@ function under(ctx, key) {
 // section dispatches on shape. ctx carries the edit callback and the save's
 // capabilities, so a section the save does not reach renders an explanation
 // instead of controls that would fail on write.
+//
+// A section the schema marks as spoiling comes up covered here for the same
+// reason it does on the dashboard, and the cover is the same one: the form is
+// where the party array, the story flags and all sixteen character structs are
+// laid out in full, so unfolding "Party" to fix a number should not be the way
+// somebody learns who joins in world four. The fold is the outer gate and the
+// cover is the inner one -- the fold's title is a section name and gives
+// nothing away, while its contents do.
 function sectionNode(sec, value, ctx) {
   if (sec.requires === "records" && !ctx.caps.records) {
     return el("p", "hint", "This save stops before the record block, so it carries no " +
       (sec.label || sec.key).toLowerCase() + ".");
+  }
+  if (sec.spoils && !ctx.bare) {
+    // ctx.bare stops the recursion: the rebuild below renders the same
+    // section, and without it the cover would wrap a cover for ever.
+    const at = under(ctx, sec.key);
+    return spoiler("form" + at, sec.spoils, function () {
+      return sectionNode(sec, value, { ...ctx, bare: true });
+    });
   }
   switch (sec.shape) {
     case "object": return objectNode(sec, value, ctx);

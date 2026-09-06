@@ -9,12 +9,12 @@
 import { CRITICAL, DIFFS, diffMeta } from "./diffs.js";
 import {
   EMBLEM, api, ask, banner, chip, copyToClipboard, el, heading, icon,
-  optionSwitch, pill, stagger, toast,
+  optionSwitch, pill, revealSpoilers, stagger, toast,
 } from "./ui.js";
 import { codeEditor, parseError } from "./editor.js";
 import { SCHEMA, indexLines, loadSchema, validate } from "./schema.js";
 import { buildForm } from "./forms.js";
-import { overview, revealSpoilers } from "./overview.js";
+import { overview } from "./overview.js";
 
 const app = document.getElementById("app");
 const topbar = document.getElementById("topbar");

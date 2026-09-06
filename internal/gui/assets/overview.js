@@ -20,7 +20,7 @@
 // modules because the server hands every asset out under a path that carries
 // the run's token, so a relative import inherits it; see assetPrefix in
 // server.go for why the query string could not do that job.
-import { chip, el, icon, pill } from "./ui.js";
+import { chip, el, icon, spoiler } from "./ui.js";
 import { SCHEMA } from "./schema.js";
 
 /* ------------------------------------------------------------- schema -- */
@@ -45,6 +45,18 @@ function ovHeaderField(key) {
   const sec = ovSection("header");
   for (const f of (sec && sec.fields) || []) if (f.key === key) return f;
   return null;
+}
+
+// The warning over a covered panel, taken from the schema of every section
+// that panel renders. Hardcoding it here would be a second list of "the
+// spoilery ones" to keep in step with the first.
+function ovSpoils(keys) {
+  const said = [];
+  for (const key of keys) {
+    const sec = ovSection(key);
+    if (sec && sec.spoils && said.indexOf(sec.spoils) < 0) said.push(sec.spoils);
+  }
+  return said.join(" ");
 }
 
 function ovNote(sec) {
@@ -112,56 +124,6 @@ function ovPanel(title, iconName, body, note) {
 }
 
 function ovEmpty(text) { return el("p", "ovempty", text); }
-
-/* ------------------------------------------------------------ spoilers -- */
-// Some of what a save holds says what is *ahead* of the player, not only what
-// is behind them. A party sheet names the guest fighting beside Sora, and a
-// list of worlds names worlds. Somebody opening a save to change its
-// difficulty has not asked to be told who they are about to meet.
-//
-// So those panels come up covered, and the reader uncovers the ones they want.
-// The choice is remembered for as long as the page is open, because having to
-// re-confirm it on every tab switch would make it a nuisance rather than a
-// courtesy, and it is deliberately not remembered any longer than that: a
-// fresh run starts covered again.
-const REVEALED = new Set();
-
-// Uncover panels named in the fragment route. It is how a deep link into a
-// save can say "and I already know what is in here", and how the screenshot
-// script shoots the party sheets without a click it has no way to make.
-export function revealSpoilers(keys) {
-  for (const k of keys || []) if (k) REVEALED.add(k);
-}
-
-function ovSpoiler(key, warning, build) {
-  const box = el("div", "spoiler");
-  const body = el("div", "spoiler-body");
-
-  const cover = el("div", "spoiler-cover");
-  const badge = el("div", "spoiler-ico");
-  badge.append(icon("i-eye-off"));
-  const copy = el("div");
-  copy.append(el("b", null, "Hidden to avoid spoilers"), el("p", null, warning));
-  const show = pill("Show anyway", "i-eye", "quiet");
-  cover.append(badge, copy, show);
-
-  const hide = pill("Hide", "i-eye-off", "quiet tiny");
-
-  let built = false;
-  function reveal(on) {
-    if (on && !built) { body.append(build()); built = true; }
-    cover.hidden = on;
-    body.hidden = !on;
-    hide.hidden = !on;
-    if (on) REVEALED.add(key); else REVEALED.delete(key);
-  }
-  show.onclick = function () { reveal(true); };
-  hide.onclick = function () { reveal(false); };
-
-  box.append(cover, hide, body);
-  reveal(REVEALED.has(key));
-  return box;
-}
 
 // Entries a save leaves at their empty value are dropped, so a fresh file does
 // not render six copies of "Empty".
@@ -561,13 +523,10 @@ export function overview(slot, doc) {
   wrap.append(ovPanel("Where", "i-globe", ovWhere(doc)));
   if (!system) wrap.append(ovPanel("Numbers", "i-level", ovNumbers(doc)));
 
-  // The two that say what is ahead rather than what is behind. A guest party
-  // member is somebody the player has met, but the sheet sits beside a name
-  // they may not have, and the story list names worlds.
+  // The two that say what is ahead rather than what is behind, and which two
+  // those are is the schema's call, not this file's.
   wrap.append(ovPanel("Party", "i-users",
-    ovSpoiler("party",
-      "This names every character travelling with Sora in this save, including " +
-      "the guest who joins in the world it was saved in.",
+    spoiler("party", ovSpoils(["characters", "party"]),
       function () { return ovParty(doc); })));
 
   wrap.append(ovPanel("Loadout", "i-wand", ovLoadout(doc),
@@ -576,9 +535,7 @@ export function overview(slot, doc) {
   wrap.append(ovPanel("Records", "i-trophy", ovRecords(doc), ovNote(ovSection("records"))));
 
   wrap.append(ovPanel("Story", "i-book",
-    ovSpoiler("story",
-      "This names the worlds this save has reached, and the beats it has " +
-      "reached inside them.",
+    spoiler("story_flags", ovSpoils(["story_flags"]),
       function () { return ovStory(doc); }),
     ovNote(ovSection("story_flags"))));
   return wrap;

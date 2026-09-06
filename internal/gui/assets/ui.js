@@ -131,6 +131,69 @@ export function banner(tone, name, title, text) {
   return n;
 }
 
+/* ------------------------------------------------------------- spoilers -- */
+// Some of what a save holds says what is *ahead* of the player, not only what
+// is behind them: who travels with Sora, which worlds there are. Somebody who
+// opened a save to change its difficulty has not asked to be told.
+//
+// So those regions come up covered and the reader uncovers the ones they want.
+// Which regions those are is not decided here -- schema.spoils says, and the
+// warning shown is the schema's own words -- because the dashboard and the
+// schema-driven form both render them and a list kept in either one would go
+// stale the moment a section moved.
+//
+// The cover does not hide a built subtree: build() is not called until the
+// reader asks. That is the difference between hidden and absent, and it is
+// what keeps the names out of a find-in-page, a screen reader and a
+// screenshot rather than merely out of sight.
+//
+// REVEALED is module state, so a choice survives a tab switch and dies with
+// the page. It is deliberately not persisted: a fresh run starts covered.
+const REVEALED = new Set();
+
+// Keys are schema section keys. A region is covered in both the dashboard and
+// the form, and a link that says "party" means both, so the form's variant --
+// keyed by path, because sections nest and two can share a key -- is named
+// here rather than in every link.
+export function revealSpoilers(keys) {
+  for (const k of keys || []) {
+    if (!k) continue;
+    const bare = k.replace(/^\//, "");
+    REVEALED.add(bare);
+    REVEALED.add("form/" + bare);
+  }
+}
+
+export function spoiler(key, warning, build) {
+  const box = el("div", "spoiler");
+  const body = el("div", "spoiler-body");
+
+  const cover = el("div", "spoiler-cover");
+  const badge = el("div", "spoiler-ico");
+  badge.append(icon("i-eye-off"));
+  const copy = el("div");
+  copy.append(el("b", null, "Hidden to avoid spoilers"), el("p", null, warning));
+  const show = pill("Show anyway", "i-eye", "quiet");
+  cover.append(badge, copy, show);
+
+  const hide = pill("Hide", "i-eye-off", "quiet tiny");
+
+  let built = false;
+  function reveal(on) {
+    if (on && !built) { body.append(build()); built = true; }
+    cover.hidden = on;
+    body.hidden = !on;
+    hide.hidden = !on;
+    if (on) REVEALED.add(key); else REVEALED.delete(key);
+  }
+  show.onclick = function () { reveal(true); };
+  hide.onclick = function () { reveal(false); };
+
+  box.append(cover, hide, body);
+  reveal(REVEALED.has(key));
+  return box;
+}
+
 /* ---------------------------------------------------------------- modal -- */
 // Replaces window.confirm(). The native dialog blocks the whole page and
 // cannot show the change list with any structure; this can, and it inherits

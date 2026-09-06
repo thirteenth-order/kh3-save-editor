@@ -268,7 +268,7 @@ comes back to it rather than to the list:
 #slot=2                       the third save in the list
 #slot=2&tab=edit              opened on Fields
 #slot=2&tab=edit&open=header  with a section already unfolded
-#slot=2&reveal=party,story    and the spoiler covers already lifted
+#slot=2&reveal=party,story_flags   and the spoiler covers already lifted
 ```
 
 That is also how the screenshots above are taken, which is why they are
