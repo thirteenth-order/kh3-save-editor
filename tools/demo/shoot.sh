@@ -94,7 +94,14 @@ shot() {
 	name=$1
 	height=$2
 	echo "==> $name"
+	# --force-prefers-reduced-motion is load-bearing, not politeness. Cards and
+	# panels enter with `animation: rise ... both`, whose from-state is opacity
+	# zero, so a capture that lands before the animation settles photographs an
+	# empty page with the whole DOM present and invisible. The page's own
+	# reduced-motion rule collapses those animations to nothing, which makes a
+	# shot show the settled state every time instead of most times.
 	"$chrome" --headless --disable-gpu --hide-scrollbars --no-sandbox \
+		--force-prefers-reduced-motion \
 		--force-device-scale-factor="$SCALE" \
 		--window-size="$WIDTH,$height" \
 		--virtual-time-budget=12000 \
@@ -120,6 +127,9 @@ for name in $want; do
 	fields) shot fields 1830 \
 		"#slot=0&tab=edit&shut=header&reveal=characters&open=characters,characters/Sora,characters/Sora/equipment,characters/Sora/equipment/accessories" ;;
 	json) shot json 1320 "#slot=0&tab=json" ;;
+	# Not in the default set: it is not a feature to advertise, and it changes
+	# only when the notices do. `tools/demo/shoot.sh legal` when they do.
+	legal) shot legal 1900 "#legal" ;;
 	*)
 		echo "no such shot: $name" >&2
 		exit 1
