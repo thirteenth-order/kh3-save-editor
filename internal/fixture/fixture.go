@@ -167,13 +167,19 @@ func reseal(p []byte, fileSize int) {
 
 // Slots returns the three saves the generator writes, keyed by slot number:
 // slot0 Standard, slot1 Critical, slot2 Beginner, at ascending levels.
-func Slots() map[int][]byte {
+func Slots() map[int][]byte { return slots(Build) }
+
+// FullSlots is the same three at the size of a real save, so a fixture tree
+// exercises the tail regions the short one stops short of.
+func FullSlots() map[int][]byte { return slots(BuildFull) }
+
+func slots(make func(Options) []byte) map[int][]byte {
 	out := map[int][]byte{}
 	for slot, diff := range map[int]byte{0: 1, 1: 3, 2: 0} {
 		o := Default()
 		o.Difficulty = diff
 		o.Level = byte(6 + slot)
-		out[slot] = Build(o)
+		out[slot] = make(o)
 	}
 	return out
 }

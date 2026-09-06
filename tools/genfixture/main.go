@@ -20,10 +20,15 @@ import (
 
 func main() {
 	layout := flag.Bool("layout", false, "build the full auto-detectable Steam directory tree")
+	// A full-size save is the only kind that reaches the record block at the
+	// tail, so it is the only kind that exercises the whole editor. It costs
+	// 9.3 MB a slot on disk and is not what the golden vectors were built on,
+	// which is why it is opt-in and the short save stays the default.
+	full := flag.Bool("full", false, "write full-size saves, which carry the tail regions too")
 	account := flag.String("account", fixture.Account, "synthetic account id to key the saves to")
 	flag.Parse()
 	if flag.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: genfixture [-layout] [-account ID] <outdir>")
+		fmt.Fprintln(os.Stderr, "usage: genfixture [-layout] [-full] [-account ID] <outdir>")
 		os.Exit(2)
 	}
 
@@ -40,8 +45,12 @@ func main() {
 		fail(err)
 	}
 
-	for slot, plain := range fixture.Slots() {
-		blob, err := kh3.Wrap(plain, key)
+	slots := fixture.Slots()
+	if *full {
+		slots = fixture.FullSlots()
+	}
+	for slot, plain := range slots {
+		blob, err := kh3.Wrap(kh3.PadToBlock(plain), key)
 		if err != nil {
 			fail(err)
 		}
