@@ -77,16 +77,10 @@ body {
   to   { transform:translate3d(4vw,3vw,0) scale(1.16); }
 }
 
-/* The rose window sits behind the masthead, turning once every four minutes. */
-.rose {
-  position:fixed; z-index:-1; pointer-events:none;
-  top:-13rem; left:50%; width:46rem; height:46rem;
-  margin-left:-23rem; opacity:.11;
-  color:var(--brass);
-  animation:turn 240s linear infinite;
-  -webkit-mask-image:radial-gradient(circle,#000 40%,transparent 72%);
-  mask-image:radial-gradient(circle,#000 40%,transparent 72%);
-}
+/* The #rose symbol is still drawn, but only where it is the subject: the halo
+   behind the empty state. A full-width copy of it turning behind the masthead
+   put a third mark on the landing page, next to the sigil and the aurora, and
+   three was one too many. */
 @keyframes turn { to { transform:rotate(360deg); } }
 
 /* -------------------------------------------------------------- layout -- */
@@ -934,7 +928,6 @@ select.scope option { background:var(--ink-2); color:var(--text); }
   .slot { padding:1.15rem 1.1rem; }
   .seg { max-width:none; }
   .seg button { font-size:.72rem; padding:.55rem .2rem; }
-  .rose { width:32rem; height:32rem; margin-left:-16rem; }
   #toasts { left:1.25rem; align-items:stretch; }
 }
 
