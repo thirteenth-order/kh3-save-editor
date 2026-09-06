@@ -491,6 +491,41 @@ footer {
 footer code { font-family:var(--mono); color:var(--brass-lo); }
 footer .legal { margin-top:.4rem; opacity:.8; }
 
+/* ------------------------------------------------------------- details -- */
+/* The read-everything panel and the JSON editor that edits it. Both sit
+   under a slot card and stay collapsed until asked for, so the page opens on
+   the one decision most people came to make. */
+
+.details { margin-top:.9rem; border-top:1px solid var(--glass-lo); padding-top:.75rem; }
+.dbody { margin-top:.75rem; display:flex; flex-direction:column; gap:.75rem; }
+
+.detail { display:flex; flex-direction:column; gap:.3rem; }
+.drow { display:flex; gap:.7rem; align-items:baseline; font-size:.8rem; line-height:1.6; }
+.dk {
+  flex:none; width:8.5rem; text-align:right; color:var(--faint);
+  text-transform:lowercase; letter-spacing:.02em;
+}
+.dv { color:var(--text); word-break:break-word; }
+
+.editor { display:flex; flex-direction:column; gap:.6rem; align-items:flex-start; }
+.epane { width:100%; display:flex; flex-direction:column; gap:.6rem; }
+
+/* A save's document runs to a few thousand lines, so the box is tall enough
+   to work in and still resizable. */
+textarea.json {
+  width:100%; min-height:22rem; resize:vertical;
+  font-family:var(--mono); font-size:.76rem; line-height:1.55;
+  color:var(--text); background:var(--glass-lo);
+  border:1px solid var(--glass-hi); border-radius:.6rem; padding:.8rem;
+  tab-size:2;
+}
+textarea.json:focus { outline:2px solid var(--brass-lo); outline-offset:1px; }
+
+@media (max-width:640px) {
+  .drow { flex-direction:column; gap:.05rem; }
+  .dk { width:auto; text-align:left; }
+}
+
 /* -------------------------------------------------------------- motion -- */
 @keyframes rise  { from { opacity:0; transform:translateY(12px); } }
 @keyframes flash { 50% { box-shadow:0 0 0 2px var(--c,var(--brass)), var(--lift); } }

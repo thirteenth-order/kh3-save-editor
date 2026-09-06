@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -553,8 +554,9 @@ func TestBrowsableAddr(t *testing.T) {
 
 // buildSave encrypts a minimal but genuine save for account, so scan() runs the
 // real decrypt path rather than a stub.
-func buildSave(t *testing.T, account string, difficulty byte, level byte) []byte {
-	t.Helper()
+// buildPlainSave is the save structure with no wrapper, which is what a
+// console save tool hands back and what buildSave then encrypts.
+func buildPlainSave(difficulty, level byte) []byte {
 	const plainLen = 0x20000
 	plain := make([]byte, plainLen)
 	copy(plain, kh3.Magic)
@@ -563,6 +565,12 @@ func buildSave(t *testing.T, account string, difficulty byte, level byte) []byte
 	binary.LittleEndian.PutUint16(plain[0x0A:], 2)
 	plain[0x14] = difficulty
 	plain[0x2C] = level
+	return plain
+}
+
+func buildSave(t *testing.T, account string, difficulty byte, level byte) []byte {
+	t.Helper()
+	plain := buildPlainSave(difficulty, level)
 
 	key, err := kh3.DeriveKey(account)
 	if err != nil {
@@ -660,4 +668,257 @@ func TestHostRefusalExplainsAPortMismatch(t *testing.T) {
 			t.Errorf("hostRefusal(%q) = %q, want %q", host, got, "bad host")
 		}
 	}
+}
+
+// --- detail and patch ------------------------------------------------------
+
+// saveTree writes one save under the directory layout Steam actually uses, so
+// the account id is discoverable the same way it is in production: as a
+// directory name on the way to the file.
+func saveTree(t *testing.T, account string, difficulty, level byte) (string, string) {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "Steam", account, "SaveGames", "kh3sv2", "data")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(dir, "KHIII_slot0.bin")
+	if err := os.WriteFile(p, buildSave(t, account, difficulty, level), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir, p
+}
+
+// accountHint is what lets a folder the user added by hand work even when the
+// id is not on the path: the scan already worked it out for that folder.
+func TestAccountHintPrefersTheMostSpecificFolder(t *testing.T) {
+	root := filepath.Join(string(filepath.Separator), "saves")
+	inner := filepath.Join(root, "player", "data")
+	dirs := []kh3.SaveDir{
+		{Path: root, AccountID: "76561190000000000"},
+		{Path: inner, AccountID: "76561190000000001"},
+		{Path: filepath.Join(string(filepath.Separator), "elsewhere"), AccountID: "76561190000000002"},
+	}
+	if got := accountHint(filepath.Join(inner, "KHIII_slot0.bin"), dirs); got != "76561190000000001" {
+		t.Errorf("hint = %q, want the id of the innermost folder holding the save", got)
+	}
+	if got := accountHint(filepath.Join(root, "KHIII_slot0.bin"), dirs); got != "76561190000000000" {
+		t.Errorf("hint = %q, want the id of the folder that holds the save", got)
+	}
+	if got := accountHint(filepath.Join(string(filepath.Separator), "nowhere", "KHIII_slot0.bin"), dirs); got != "" {
+		t.Errorf("hint = %q for a path in no known folder, want empty", got)
+	}
+}
+
+// apiServer wires the real routes, so these tests exercise the same guard the
+// browser hits rather than calling the handlers directly.
+func apiServer(dirs []kh3.SaveDir) *Server {
+	s := &Server{token: newToken(), addr: "127.0.0.1:54321", mux: http.NewServeMux(),
+		folder: &store{path: filepath.Join(os.TempDir(), "kh3-nonexistent-store.json")}}
+	for _, d := range dirs {
+		s.folder.add(d.Path)
+	}
+	s.mux.HandleFunc("/api/detail", s.guard(s.handleDetail))
+	s.mux.HandleFunc("/api/patch", s.guard(s.handlePatch))
+	return s
+}
+
+func call(s *Server, method, url string, body []byte) *httptest.ResponseRecorder {
+	var r *http.Request
+	if body == nil {
+		r = httptest.NewRequest(method, url, nil)
+	} else {
+		r = httptest.NewRequest(method, url, bytes.NewReader(body))
+	}
+	r.Host = "127.0.0.1:54321"
+	r.Header.Set(tokenHeader, s.token)
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, r)
+	return w
+}
+
+func TestDetailRendersTheSameDocumentAsDump(t *testing.T) {
+	const account = "76561190000000000"
+	dir, p := saveTree(t, account, 3, 7)
+	s := apiServer([]kh3.SaveDir{{Path: dir, Platform: "added", AccountID: account}})
+
+	w := call(s, "GET", "http://127.0.0.1:54321/api/detail?path="+url.QueryEscape(p), nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("code %d: %s", w.Code, w.Body.String())
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"header", "characters", "inventory", "party", "magic",
+		"links", "shortcuts", "story_flags", "materials", "records"} {
+		if _, ok := doc[key]; !ok {
+			t.Errorf("the document has no %q section", key)
+		}
+	}
+	// The account id is the key material and a dump is what people paste into
+	// a bug report, so it must not be in there at all.
+	if doc["account"] != nil {
+		t.Errorf("detail carries an account id: %v", doc["account"])
+	}
+	if strings.Contains(w.Body.String(), account) {
+		t.Error("the detail response carries the account id somewhere")
+	}
+}
+
+func TestDetailRefusesAPathOutsideASaveFolder(t *testing.T) {
+	dir, _ := saveTree(t, "76561190000000000", 1, 6)
+	s := apiServer([]kh3.SaveDir{{Path: dir, Platform: "added"}})
+	outside := filepath.Join(t.TempDir(), "KHIII_slot0.bin")
+	w := call(s, "GET", "http://127.0.0.1:54321/api/detail?path="+url.QueryEscape(outside), nil)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("code %d, want 403", w.Code)
+	}
+}
+
+func TestPatchAppliesAndBacksUp(t *testing.T) {
+	const account = "76561190000000000"
+	dir, p := saveTree(t, account, 1, 6)
+	s := apiServer([]kh3.SaveDir{{Path: dir, Platform: "added", AccountID: account}})
+
+	body := []byte(`{"path":` + quote(p) + `,"doc":{"header":{"munny":4242}}}`)
+	w := call(s, "POST", "http://127.0.0.1:54321/api/patch", body)
+	if w.Code != http.StatusOK {
+		t.Fatalf("code %d: %s", w.Code, w.Body.String())
+	}
+	var res swapResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if !res.Written || res.Backup == "" {
+		t.Fatalf("written=%v backup=%q; a write must always leave a backup", res.Written, res.Backup)
+	}
+	if _, err := os.Stat(res.Backup); err != nil {
+		t.Errorf("the backup it reported does not exist: %v", err)
+	}
+	// The file on disk must now decrypt and read back the new value.
+	blob, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := kh3.DeriveKey(account)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, _, err := kh3.Open(blob, key)
+	if err != nil {
+		t.Fatalf("the save it wrote does not reopen: %v", err)
+	}
+	if got := kh3.ReadHeader(plain).Munny; got != 4242 {
+		t.Errorf("munny = %d, want 4242", got)
+	}
+}
+
+func TestPatchDryRunWritesNothing(t *testing.T) {
+	const account = "76561190000000000"
+	dir, p := saveTree(t, account, 1, 6)
+	s := apiServer([]kh3.SaveDir{{Path: dir, Platform: "added", AccountID: account}})
+	before, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := []byte(`{"path":` + quote(p) + `,"dryRun":true,"doc":{"header":{"munny":4242}}}`)
+	w := call(s, "POST", "http://127.0.0.1:54321/api/patch", body)
+	if w.Code != http.StatusOK {
+		t.Fatalf("code %d: %s", w.Code, w.Body.String())
+	}
+	var res swapResponse
+	json.Unmarshal(w.Body.Bytes(), &res)
+	if res.Written || len(res.Changes) != 1 {
+		t.Errorf("written=%v changes=%v; a dry run reports and writes nothing", res.Written, res.Changes)
+	}
+	after, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Error("a dry run changed the file")
+	}
+}
+
+func TestPatchRefusesAPathOutsideASaveFolder(t *testing.T) {
+	dir, _ := saveTree(t, "76561190000000000", 1, 6)
+	s := apiServer([]kh3.SaveDir{{Path: dir, Platform: "added"}})
+	outside := filepath.Join(t.TempDir(), "KHIII_slot0.bin")
+	body := []byte(`{"path":` + quote(outside) + `,"doc":{"header":{"munny":1}}}`)
+	if w := call(s, "POST", "http://127.0.0.1:54321/api/patch", body); w.Code != http.StatusForbidden {
+		t.Fatalf("code %d, want 403", w.Code)
+	}
+}
+
+func TestPatchRejectsABadDocument(t *testing.T) {
+	const account = "76561190000000000"
+	dir, p := saveTree(t, account, 1, 6)
+	s := apiServer([]kh3.SaveDir{{Path: dir, Platform: "added", AccountID: account}})
+	for _, doc := range []string{`{"materials":{"999":1}}`, `{"characters":{"Nobody":{"hp":1}}}`} {
+		body := []byte(`{"path":` + quote(p) + `,"doc":` + doc + `}`)
+		if w := call(s, "POST", "http://127.0.0.1:54321/api/patch", body); w.Code != http.StatusBadRequest {
+			t.Errorf("%s gave %d, want 400", doc, w.Code)
+		}
+	}
+}
+
+func TestPatchIsPostOnly(t *testing.T) {
+	dir, _ := saveTree(t, "76561190000000000", 1, 6)
+	s := apiServer([]kh3.SaveDir{{Path: dir, Platform: "added"}})
+	if w := call(s, "GET", "http://127.0.0.1:54321/api/patch", nil); w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("code %d, want 405", w.Code)
+	}
+}
+
+// A save with no Steam wrapper must be listed and editable, not reported as
+// "could not determine the account id" for a file we can read perfectly well.
+func TestScanAndPatchHandleASaveWithNoWrapper(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "KHIII_slot0.bin")
+	plain, err := kh3.Seal(buildPlainSave(3, 7), kh3.FormatPlain, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, plain, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	res := scan([]kh3.SaveDir{{Path: dir, Platform: "added"}})
+	got := res.Dirs[0].Slots[0]
+	if got.Error != "" {
+		t.Fatalf("an unwrapped save reported %q", got.Error)
+	}
+	if got.Format != "plain" || got.Account != "" {
+		t.Errorf("format %q account %q, want plain and no account", got.Format, got.Account)
+	}
+	if got.Name != "Critical" || got.Level != 7 {
+		t.Errorf("decoded as %q level %d", got.Name, got.Level)
+	}
+
+	s := apiServer([]kh3.SaveDir{{Path: dir, Platform: "added"}})
+	body := []byte(`{"path":` + quote(p) + `,"doc":{"header":{"munny":99}}}`)
+	w := call(s, "POST", "http://127.0.0.1:54321/api/patch", body)
+	if w.Code != http.StatusOK {
+		t.Fatalf("patching an unwrapped save gave %d: %s", w.Code, w.Body.String())
+	}
+	blob, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kh3.DetectFormat(blob) != kh3.FormatPlain {
+		t.Error("the write changed the container form")
+	}
+	back, _, err := kh3.Open(blob, nil)
+	if err != nil {
+		t.Fatalf("the save it wrote does not reopen: %v", err)
+	}
+	if got := kh3.ReadHeader(back).Munny; got != 99 {
+		t.Errorf("munny = %d, want 99", got)
+	}
+}
+
+func quote(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
 }

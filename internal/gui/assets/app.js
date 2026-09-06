@@ -379,8 +379,186 @@ function slotCard(slot, index) {
 
   const act = el("div", "act");
   act.append(apply, hint);
-  box.append(seg.node, extras, act, out);
+  box.append(seg.node, extras, act, out, detailsPanel(slot));
   return box;
+}
+
+/* -------------------------------------------------------------- details -- */
+// Everything the format layer knows about a save, shown as a summary and
+// offered for editing as the same JSON document the dump and patch
+// subcommands use. The interface does not grow a widget per field: the
+// document is the surface, and it is validated by the same code either way.
+//
+// Every value below reaches the DOM through textContent. Map paths and folder
+// names come out of the save file, so they are attacker-controlled text.
+
+// row renders one labelled line, or nothing when there is nothing to say.
+function row(label, text) {
+  if (!text) return null;
+  const n = el("div", "drow");
+  n.append(el("span", "dk", label), el("span", "dv", text));
+  return n;
+}
+
+// named joins the "name" of each entry of a dump section, in index order.
+function named(section, extra) {
+  if (!section) return "";
+  return Object.keys(section)
+    .sort(function (a, b) { return Number(a) - Number(b); })
+    .map(function (k) {
+      const e = section[k];
+      return e.name + (extra ? extra(e) : "");
+    })
+    .join(", ");
+}
+
+// live drops the entries a save leaves at their empty value, so a fresh file
+// does not render six lines of "Empty, Empty, Empty".
+function live(section, isSet) {
+  if (!section) return {};
+  const out = {};
+  for (const k of Object.keys(section)) if (isSet(section[k])) out[k] = section[k];
+  return out;
+}
+
+function summary(doc) {
+  const wrap = el("div", "detail");
+  const h = doc.header || {};
+
+  const rows = [
+    row("world", h.world_logo_name),
+    row("location", h.location_name),
+    row("map", h.map_path),
+    row("save icon", h.save_icon_name),
+    row("party", named(live(doc.party, function (e) { return e.id !== 0; }))),
+    row("magic", named(live(doc.magic, function (e) { return e.id !== 0; }))),
+    row("links", named(live(doc.links, function (e) { return e.id !== 0; }))),
+    row("materials", named(doc.materials, function (e) { return " ×" + e.count; })),
+    row("story", named(doc.story_flags, function (e) { return " " + e.value; })),
+    row("crabs", h.crabs ? String(h.crabs) : ""),
+    row("enemies defeated", h.enemies_defeated ? String(h.enemies_defeated) : ""),
+  ];
+  for (const r of rows) if (r) wrap.append(r);
+
+  for (const name of Object.keys(doc.characters || {})) {
+    const c = doc.characters[name];
+    const worn = [];
+    for (const kind of ["weapons", "armor", "accessories", "items"]) {
+      const g = (c.equipment || {})[kind] || {};
+      for (const s of Object.keys(g).sort()) worn.push(g[s].name);
+    }
+    if (!worn.length) continue;
+    const r = row(name, "hp " + c.hp + " mp " + c.mp + " — " + worn.join(", "));
+    if (r) wrap.append(r);
+  }
+  return wrap;
+}
+
+function detailsPanel(slot) {
+  const wrap = el("div", "details");
+  const toggle = pill("Details", "i-search", "quiet");
+  const body = el("div", "dbody");
+  body.hidden = true;
+  let loaded = false;
+
+  toggle.onclick = async function () {
+    if (loaded) { body.hidden = !body.hidden; return; }
+    toggle.disabled = true;
+    try {
+      const doc = await api("/api/detail?path=" + encodeURIComponent(slot.path));
+      body.append(summary(doc), jsonEditor(slot, doc));
+      loaded = true;
+      body.hidden = false;
+    } catch (e) {
+      toast(e.message, "bad");
+    }
+    toggle.disabled = false;
+  };
+
+  wrap.append(toggle, body);
+  return wrap;
+}
+
+function jsonEditor(slot, doc) {
+  const wrap = el("div", "editor");
+  const open = pill("Edit as JSON", "i-slider", "quiet");
+  const pane = el("div", "epane");
+  pane.hidden = true;
+
+  const area = el("textarea", "json");
+  area.spellcheck = false;
+  area.value = JSON.stringify(doc, null, 2);
+
+  const note = el("div", "hint",
+    "Keys you delete are left alone. Everything here goes through the same " +
+    "checks as the patch subcommand, and a timestamped backup is written " +
+    "before anything is touched.");
+
+  const preview = pill("Preview", "i-search", "quiet");
+  const write = pill("Apply", "i-check", "go");
+  const log = el("div");
+
+  function parsed() {
+    try {
+      return JSON.parse(area.value);
+    } catch (e) {
+      toast("That is not valid JSON: " + e.message, "bad");
+      return null;
+    }
+  }
+
+  async function send(dry) {
+    const body = parsed();
+    if (body === null) return;
+    log.innerHTML = "";
+    try {
+      const res = await api("/api/patch", { path: slot.path, doc: body, dryRun: dry });
+      if (!res.changes || !res.changes.length) {
+        log.append(el("div", "hint", "Nothing would change."));
+        return;
+      }
+      log.append(el("pre", "log", res.changes.join("\n")));
+      if (res.backup) {
+        const done = el("div", "facts");
+        done.append(chip("i-shield", "backup → " + res.backup, "mono path"));
+        log.append(done);
+        toast(slot.slot + " updated", "good");
+      }
+    } catch (e) {
+      log.append(el("div", "hint err", e.message));
+      toast(e.message, "bad");
+    }
+  }
+
+  preview.onclick = function () { send(true); };
+  write.onclick = async function () {
+    const body = parsed();
+    if (body === null) return;
+    let changes = [];
+    try {
+      changes = (await api("/api/patch", { path: slot.path, doc: body, dryRun: true })).changes || [];
+    } catch (e) {
+      toast(e.message, "bad");
+      return;
+    }
+    if (!changes.length) { toast("Nothing would change"); return; }
+    const ok = await ask({
+      title: "Apply " + changes.length + " change" + (changes.length === 1 ? "" : "s") +
+        " to " + slot.slot + "?",
+      sub: "A timestamped backup is written before anything is touched.",
+      from: null, to: null,
+      lines: changes,
+    });
+    if (ok) send(false);
+  };
+
+  open.onclick = function () { pane.hidden = !pane.hidden; };
+
+  const acts = el("div", "act");
+  acts.append(preview, write);
+  pane.append(area, note, acts, log);
+  wrap.append(open, pane);
+  return wrap;
 }
 
 /* -------------------------------------------------------------- folders -- */

@@ -162,6 +162,10 @@ type slotInfo struct {
 	Munny       int    `json:"munny"`
 	Location    string `json:"location"`
 	Account     string `json:"account"`
+	// Format is "steam" or "plain". A plain save has no account id, so the
+	// interface shows the form instead of an empty account chip.
+	Format string `json:"format"`
+	World  string `json:"world"`
 	// Whether the Critical start items would do anything for this save, so the
 	// interface can show those switches only when they would.
 	CanGrant  bool   `json:"canGrantStartItem"`
@@ -199,19 +203,29 @@ func scan(dirs []kh3.SaveDir) scanResult {
 				di.Slots = append(di.Slots, si)
 				continue
 			}
-			acct, key, err := kh3.ResolveAccount(p, blob, d.AccountID)
-			if err != nil {
-				si.Error = "could not determine the account id"
-				di.Slots = append(di.Slots, si)
-				continue
+			// A save with no Steam wrapper carries no account id and needs no
+			// key. Asking ResolveAccount about one would fail and the slot
+			// would show "could not determine the account id" for a file this
+			// tool can read perfectly well.
+			var key []byte
+			format := kh3.DetectFormat(blob)
+			if format.NeedsKey() {
+				acct, k, err := kh3.ResolveAccount(p, blob, d.AccountID)
+				if err != nil {
+					si.Error = "could not determine the account id"
+					di.Slots = append(di.Slots, si)
+					continue
+				}
+				key = k
+				si.Account = kh3.MaskAccount(acct)
 			}
-			plain, err := kh3.Unwrap(blob, key)
+			plain, _, err := kh3.Open(blob, key)
 			if err != nil {
 				si.Error = err.Error()
 				di.Slots = append(di.Slots, si)
 				continue
 			}
-			si.Account = kh3.MaskAccount(acct)
+			si.Format = format.String()
 			h := kh3.ReadHeader(plain)
 			si.Difficulty = int(h.Difficulty)
 			si.Name = kh3.Difficulties[h.Difficulty]
@@ -225,6 +239,7 @@ func scan(dirs []kh3.SaveDir) scanResult {
 			si.Playtime = h.Playtime()
 			si.Munny = int(h.Munny)
 			si.Location = h.MapPath
+			si.World = kh3.WorldName(int(h.WorldLogo))
 			si.CanGrant, si.CanRevoke = kh3.StartItemState(plain)
 			di.Slots = append(di.Slots, si)
 		}
@@ -247,6 +262,15 @@ type folderResponse struct {
 	Path     string `json:"path,omitempty"`
 	Removed  string `json:"removed,omitempty"`
 	Canceled bool   `json:"canceled,omitempty"`
+}
+
+// patchRequest carries a document straight through to kh3.Patch. Doc is raw
+// JSON rather than a decoded map so the patch layer sees exactly the bytes the
+// caller sent, the same as the CLI reading a file.
+type patchRequest struct {
+	Path   string          `json:"path"`
+	Doc    json.RawMessage `json:"doc"`
+	DryRun bool            `json:"dryRun"`
 }
 
 type swapResponse struct {
@@ -396,6 +420,90 @@ func (s *Server) addFolder(w http.ResponseWriter, raw string) {
 	writeJSON(w, http.StatusOK, folderResponse{Path: dir})
 }
 
+// openSave reads a save in whichever form it is stored in. A save with no
+// Steam wrapper needs no account id, so none of the account plumbing runs for
+// one and the endpoints below work on it exactly as they do on a PC save.
+type openedSave struct {
+	plain  []byte
+	key    []byte
+	format kh3.Format
+}
+
+// accountHint returns the account id of the discovered folder that holds p.
+// Usually the id is also a directory name on the way to the save and would be
+// found anyway, but a folder the user added by hand need not be laid out that
+// way, and the scan already knows the answer for it.
+func accountHint(p string, dirs []kh3.SaveDir) string {
+	container := kh3.Container(p)
+	best := ""
+	for _, d := range dirs {
+		if d.AccountID == "" {
+			continue
+		}
+		if d.Path == container || strings.HasPrefix(container, d.Path+string(filepath.Separator)) {
+			// Prefer the most specific folder, so nested roots do not hand
+			// back the id of an unrelated account higher up the tree.
+			if len(d.Path) > len(best) {
+				best = d.Path
+			}
+		}
+	}
+	for _, d := range dirs {
+		if d.Path == best {
+			return d.AccountID
+		}
+	}
+	return ""
+}
+
+func openSave(p string, account string) (*openedSave, error) {
+	blob, err := kh3.ReadFile(p)
+	if err != nil {
+		return nil, err
+	}
+	var key []byte
+	format := kh3.DetectFormat(blob)
+	if format.NeedsKey() {
+		if _, key, err = kh3.ResolveAccount(p, blob, account); err != nil {
+			return nil, err
+		}
+	}
+	plain, _, err := kh3.Open(blob, key)
+	if err != nil {
+		return nil, err
+	}
+	return &openedSave{plain: plain, key: key, format: format}, nil
+}
+
+// writeSave seals, re-reads its own output the way the game would, backs up
+// the file it is about to replace and only then writes. Every write path in
+// this program does exactly this, and none of them may skip a step.
+func writeSave(p string, o *openedSave, newPlain []byte) (string, error) {
+	outBlob, err := kh3.Seal(newPlain, o.format, o.key)
+	if err != nil {
+		return "", err
+	}
+	check, _, err := kh3.Open(outBlob, o.key)
+	if err != nil {
+		return "", fmt.Errorf("self-check failed, nothing written: %w", err)
+	}
+	// Seal rewrites the CRC at 0x0C, so compare around it.
+	if string(check[:0x0C]) != string(newPlain[:0x0C]) ||
+		string(check[0x10:]) != string(newPlain[0x10:]) {
+		return "", fmt.Errorf("self-check failed, nothing written")
+	}
+	// For a save inside a zip this copies the whole archive, which is what a
+	// member replacement actually rewrites.
+	bak, err := kh3.BackupOf(p, time.Now())
+	if err != nil {
+		return "", fmt.Errorf("could not write a backup, so nothing was changed: %w", err)
+	}
+	if err := kh3.WriteFile(p, outBlob, 0o644); err != nil {
+		return "", err
+	}
+	return bak, nil
+}
+
 func (s *Server) handleSwap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		fail(w, http.StatusMethodNotAllowed, "POST only")
@@ -406,7 +514,8 @@ func (s *Server) handleSwap(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "bad request: %v", err)
 		return
 	}
-	if !allowedPath(req.Path, s.saveDirs()) {
+	dirs := s.saveDirs()
+	if !allowedPath(req.Path, dirs) {
 		fail(w, http.StatusForbidden, "refusing to touch a file outside a detected save folder")
 		return
 	}
@@ -415,27 +524,17 @@ func (s *Server) handleSwap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	blob, err := kh3.ReadFile(req.Path)
+	o, err := openSave(req.Path, accountHint(req.Path, dirs))
 	if err != nil {
 		fail(w, http.StatusInternalServerError, "%v", err)
 		return
 	}
-	_, key, err := kh3.ResolveAccount(req.Path, blob, "")
-	if err != nil {
-		fail(w, http.StatusInternalServerError, "%v", err)
-		return
-	}
-	plain, err := kh3.Unwrap(blob, key)
-	if err != nil {
-		fail(w, http.StatusInternalServerError, "%v", err)
-		return
-	}
-	if !kh3.IsSlot(plain) {
+	if !kh3.IsSlot(o.plain) {
 		fail(w, http.StatusBadRequest, "that is the system file, it has no difficulty")
 		return
 	}
 
-	newPlain, changes, err := kh3.SwapDifficulty(plain, byte(req.Difficulty), kh3.SwapOptions{
+	newPlain, changes, err := kh3.SwapDifficulty(o.plain, byte(req.Difficulty), kh3.SwapOptions{
 		ScaleHP:          !req.NoScaleHP,
 		GrantStartItems:  req.GrantItems,
 		RevokeStartItems: req.RevokeItem,
@@ -444,19 +543,80 @@ func (s *Server) handleSwap(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "%v", err)
 		return
 	}
-	outBlob, err := kh3.Wrap(newPlain, key)
+	resp := swapResponse{Changes: changes}
+	if req.DryRun || len(changes) == 0 {
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+	bak, err := writeSave(req.Path, o, newPlain)
 	if err != nil {
 		fail(w, http.StatusInternalServerError, "%v", err)
 		return
 	}
-	// Re-read our own output the way the game would, before writing anything.
-	check, err := kh3.Unwrap(outBlob, key)
-	if err != nil {
-		fail(w, http.StatusInternalServerError, "self-check failed: %v", err)
+	resp.Backup, resp.Written = bak, true
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// handleDetail renders one save as the same JSON document the dump subcommand
+// writes, so the interface and the CLI describe a save identically.
+//
+// The account id is deliberately not included. It is the key material, and a
+// dump is the thing people paste into a bug report.
+func (s *Server) handleDetail(w http.ResponseWriter, r *http.Request) {
+	p := r.URL.Query().Get("path")
+	dirs := s.saveDirs()
+	if !allowedPath(p, dirs) {
+		fail(w, http.StatusForbidden, "refusing to read a file outside a detected save folder")
 		return
 	}
-	if string(check[:0x0C]) != string(newPlain[:0x0C]) || string(check[0x10:]) != string(newPlain[0x10:]) {
-		fail(w, http.StatusInternalServerError, "self-check failed, nothing written")
+	o, err := openSave(p, accountHint(p, dirs))
+	if err != nil {
+		fail(w, http.StatusInternalServerError, "%v", err)
+		return
+	}
+	doc, err := kh3.Dump(o.plain, "", kh3.CharCount)
+	if err != nil {
+		fail(w, http.StatusInternalServerError, "%v", err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(doc)
+}
+
+// handlePatch applies a JSON document to a save, through exactly the same
+// validation the patch subcommand uses. This is what makes every field the
+// format layer knows about editable from the interface without the interface
+// having to grow a widget for each one.
+func (s *Server) handlePatch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		fail(w, http.StatusMethodNotAllowed, "POST only")
+		return
+	}
+	var req patchRequest
+	// A whole dump comes back a good deal larger than a swap request: the
+	// ability arrays alone are 512 entries per character.
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<20)).Decode(&req); err != nil {
+		fail(w, http.StatusBadRequest, "bad request: %v", err)
+		return
+	}
+	dirs := s.saveDirs()
+	if !allowedPath(req.Path, dirs) {
+		fail(w, http.StatusForbidden, "refusing to touch a file outside a detected save folder")
+		return
+	}
+	if len(req.Doc) == 0 {
+		fail(w, http.StatusBadRequest, "no document")
+		return
+	}
+	o, err := openSave(req.Path, accountHint(req.Path, dirs))
+	if err != nil {
+		fail(w, http.StatusInternalServerError, "%v", err)
+		return
+	}
+	newPlain, changes, err := kh3.Patch(o.plain, req.Doc)
+	if err != nil {
+		fail(w, http.StatusBadRequest, "%v", err)
 		return
 	}
 	resp := swapResponse{Changes: changes}
@@ -464,14 +624,8 @@ func (s *Server) handleSwap(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
-	// For a save inside a zip this copies the whole archive, which is what a
-	// member replacement actually rewrites.
-	bak, err := kh3.BackupOf(req.Path, time.Now())
+	bak, err := writeSave(req.Path, o, newPlain)
 	if err != nil {
-		fail(w, http.StatusInternalServerError, "could not write a backup, so nothing was changed: %v", err)
-		return
-	}
-	if err := kh3.WriteFile(req.Path, outBlob, 0o644); err != nil {
 		fail(w, http.StatusInternalServerError, "%v", err)
 		return
 	}
@@ -543,6 +697,8 @@ func Serve(noBrowser bool, addr string) error {
 	s.mux.HandleFunc("/", s.guard(s.handleIndex))
 	s.mux.HandleFunc("/api/scan", s.guard(s.handleScan))
 	s.mux.HandleFunc("/api/swap", s.guard(s.handleSwap))
+	s.mux.HandleFunc("/api/detail", s.guard(s.handleDetail))
+	s.mux.HandleFunc("/api/patch", s.guard(s.handlePatch))
 	s.mux.HandleFunc("/api/browse", s.guard(s.handleBrowse))
 	s.mux.HandleFunc("/api/folder", s.guard(s.handleAddFolder))
 
