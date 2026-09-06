@@ -233,7 +233,7 @@ find-in-page and out of a screenshot as well as out of sight. Uncovering one
 lasts as long as the tab is open; a fresh run starts covered again. The shot
 below has both lifted, because a picture of two covers would not tell you much.
 
-<img src="docs/screenshot-summary.png" alt="The Summary dashboard: panels for where the save is, its numbers as tiles with meters for level and lucky emblems, and a party panel of character sheets showing HP, MP, focus, equipped gear by kind, ability counts and AI behaviour" width="720">
+<img src="docs/screenshot-summary.png" alt="The Summary dashboard: panels for where the save is, its numbers as tiles with meters for level and lucky emblems, and a party panel of character sheets showing HP, MP, focus, equipped gear by kind, ability counts and AI behavior" width="720">
 
 **Fields** is a form, and it is not hand-written. The program publishes a
 description of every field it can edit -- what each one is called, which table
@@ -280,6 +280,7 @@ The interface covers the common case. The CLI covers the rest.
 
 ```sh
 kh3save                              # open the interface
+kh3save gui       [-no-browser]      # the same, explicitly
 kh3save info      <save|dir|zip>...  # header fields
 kh3save info -l   <save>             # ...plus party, gear, magic, materials
 kh3save verify    <save|dir|zip>...  # check both integrity fields
@@ -291,7 +292,15 @@ kh3save convert   <save>  -to plain  # strip or add the Steam wrapper
 kh3save dump      <save>  -o s.json  # render as JSON
 kh3save patch     <save>  s.json     # apply a partial JSON document
 kh3save schema                       # every editable field, and its range
+kh3save decrypt   <save>  -o <dir>   # write the plaintext out
+kh3save encrypt   <plain> -o <dir>   # wrap plaintext back up, keyed to an account
+kh3save grant-abilities <save> -critical   # Critical's abilities on any difficulty
 ```
+
+`decrypt` and `encrypt` are the escape hatch: they hand the plaintext to
+whatever else you want to poke at it with, and take it back afterwards. Note
+that `decrypt` writes the padded length, so `convert -to plain` is what you
+want for a console-length slot.
 
 `schema` prints the same field description the interface builds its editor out
 of, so "what can this actually edit?" has an answer that does not involve
@@ -829,5 +838,13 @@ carry, and it is not designed to defeat DRM or enable piracy.
 
 Your account id and the key derived from it both identify your Steam account,
 so the tool does not print either one unless you ask (`-with-account`,
-`-show-key`), and the interface masks the id. Bear that in mind before pasting
-output into a bug report.
+`-show-key`). Because Steam names your save directory after the id, every path
+the tool prints is masked the same way -- `765611*******0000` -- so the line
+above the account field cannot spell out what the field is hiding. The
+interface masks it too.
+
+`saved_at`, the wall-clock time the game wrote a save, rides the same opt-in.
+It is the one field that says when somebody was playing, to the millisecond, so
+a dump omits it unless you pass `-with-account`, and the interface never shows
+it. Paths and ids are masked on the way out only: every read, write and key
+derivation uses the real value.

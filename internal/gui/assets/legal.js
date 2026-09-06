@@ -10,7 +10,7 @@ import { el, heading, icon } from "./ui.js";
 // was original and the program was not affiliated with anybody. That is true
 // and it was not enough: a rights holder glancing at a Kingdom Hearts save
 // editor wants to know whether their artwork is inside it, and a sentence in
-// eight-point grey at the bottom of a page does not answer that. So it is a
+// eight-point gray at the bottom of a page does not answer that. So it is a
 // page, it says what is and is not in here in the order somebody would ask,
 // and the footer links to it.
 //
