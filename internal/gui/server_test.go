@@ -306,9 +306,10 @@ func TestJSONContract(t *testing.T) {
 // Guard against the mismatch that actually happened: the page read slot.name
 // while the server sent difficultyName, so the pill rendered blank.
 func TestUIReadsOnlyKeysWeSend(t *testing.T) {
-	// The markup and the script are separate assets now, so scan both.
+	// The markup and the scripts are separate assets now, so scan all of them.
 	var page []byte
-	for _, name := range []string{"assets/index.html", "assets/app.js"} {
+	for _, name := range []string{"assets/index.html", "assets/ui.js", "assets/editor.js",
+		"assets/schema.js", "assets/forms.js", "assets/app.js"} {
 		blob, err := assets.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)
@@ -921,4 +922,107 @@ func TestScanAndPatchHandleASaveWithNoWrapper(t *testing.T) {
 func quote(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
+}
+
+// The page builds its whole editor out of /api/schema, so a field renamed in
+// Go and not in the script -- or the other way round -- is a panel that
+// silently renders nothing. Same idea as TestUIReadsOnlyKeysWeSend, for the
+// other payload.
+func TestUIReadsOnlySchemaKeysWeSend(t *testing.T) {
+	var page []byte
+	for _, name := range []string{"assets/schema.js", "assets/forms.js", "assets/app.js"} {
+		blob, err := assets.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		page = append(page, blob...)
+	}
+
+	// Marshal a schema and collect every key name that appears anywhere in it,
+	// at any depth: the script reaches into sections, fields and entries alike.
+	blob, err := json.Marshal(kh3.Describe())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tree any
+	if err := json.Unmarshal(blob, &tree); err != nil {
+		t.Fatal(err)
+	}
+	sent := map[string]bool{}
+	var walk func(any)
+	walk = func(v any) {
+		switch t := v.(type) {
+		case map[string]any:
+			for k, sub := range t {
+				sent[k] = true
+				walk(sub)
+			}
+		case []any:
+			for _, sub := range t {
+				walk(sub)
+			}
+		}
+	}
+	walk(tree)
+	// Names the script gives a schema value locally, and the DOM properties it
+	// reads off the same variables.
+	for _, ours := range []string{"length", "indexOf", "filter", "some", "map", "slice",
+		"split", "push", "list", "byId", "has", "get", "node", "input", "checked", "value"} {
+		sent[ours] = true
+	}
+
+	re := regexp.MustCompile(`\b(?:SCHEMA|sec|sub|f)\.([a-zA-Z][a-zA-Z0-9_]*)`)
+	for _, m := range re.FindAllStringSubmatch(string(page), -1) {
+		if !sent[m[1]] {
+			t.Errorf("the page reads schema key %q, which /api/schema does not carry", m[1])
+		}
+	}
+}
+
+// The schema is what the editor is built out of, so the endpoint has to answer
+// with something the page can use rather than merely with 200.
+func TestSchemaEndpointDescribesTheDocument(t *testing.T) {
+	s := &Server{token: newToken(), addr: "127.0.0.1:54321", mux: http.NewServeMux()}
+	s.mux.HandleFunc("/api/schema", s.guard(s.handleSchema))
+
+	req := httptest.NewRequest("GET", "http://127.0.0.1:54321/api/schema", nil)
+	req.Host = "127.0.0.1:54321"
+	req.Header.Set(tokenHeader, s.token)
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("code %d, want 200", w.Code)
+	}
+	var got kh3.Schema
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.DocFormat != kh3.DocFormat {
+		t.Errorf("docFormat %q, want %q", got.DocFormat, kh3.DocFormat)
+	}
+	if len(got.Sections) != len(kh3.Sections()) {
+		t.Errorf("%d sections, want %d", len(got.Sections), len(kh3.Sections()))
+	}
+	if len(got.Tables) == 0 || len(got.EquipTables) == 0 {
+		t.Error("the schema went out with no tables, so every picker would be empty")
+	}
+	// Cached after the first call, and the cache must not hand back something
+	// different.
+	w2 := httptest.NewRecorder()
+	s.mux.ServeHTTP(w2, req)
+	if w2.Body.String() != w.Body.String() {
+		t.Error("the second call answered differently from the first")
+	}
+}
+
+func TestSchemaEndpointNeedsTheToken(t *testing.T) {
+	s := &Server{token: newToken(), addr: "127.0.0.1:54321", mux: http.NewServeMux()}
+	s.mux.HandleFunc("/api/schema", s.guard(s.handleSchema))
+	req := httptest.NewRequest("GET", "http://127.0.0.1:54321/api/schema", nil)
+	req.Host = "127.0.0.1:54321"
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("code %d, want 403", w.Code)
+	}
 }

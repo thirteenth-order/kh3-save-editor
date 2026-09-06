@@ -491,14 +491,31 @@ footer {
 footer code { font-family:var(--mono); color:var(--brass-lo); }
 footer .legal { margin-top:.4rem; opacity:.8; }
 
-/* ------------------------------------------------------------- details -- */
-/* The read-everything panel and the JSON editor that edits it. Both sit
-   under a slot card and stay collapsed until asked for, so the page opens on
-   the one decision most people came to make. */
+/* ----------------------------------------------------------- workbench -- */
+/* The editor under a slot card: a summary to read, a form built from the
+   published schema, and the document itself. All three sit behind one toggle
+   and stay collapsed, so the page still opens on the one decision most people
+   came to make. */
 
 .details { margin-top:.9rem; border-top:1px solid var(--glass-lo); padding-top:.75rem; }
-.dbody { margin-top:.75rem; display:flex; flex-direction:column; gap:.75rem; }
+.dbody { margin-top:.75rem; }
+.work { display:flex; flex-direction:column; gap:.85rem; }
 
+.tabs { display:flex; gap:.35rem; flex-wrap:wrap; }
+.pill.tab {
+  background:transparent; border-color:transparent; color:var(--dim);
+  padding:.42rem .9rem; font-size:.78rem;
+}
+.pill.tab:hover { color:var(--text); background:var(--glass-lo); }
+.pill.tab[aria-selected="true"] {
+  color:var(--ink); background:var(--brass); border-color:var(--brass);
+}
+.pill.tab[aria-selected="true"] svg { color:var(--ink); }
+
+.panes { min-height:4rem; }
+.pane { animation:rise .32s var(--out) both; }
+
+/* ----- the read-only summary ----- */
 .detail { display:flex; flex-direction:column; gap:.3rem; }
 .drow { display:flex; gap:.7rem; align-items:baseline; font-size:.8rem; line-height:1.6; }
 .dk {
@@ -507,23 +524,224 @@ footer .legal { margin-top:.4rem; opacity:.8; }
 }
 .dv { color:var(--text); word-break:break-word; }
 
-.editor { display:flex; flex-direction:column; gap:.6rem; align-items:flex-start; }
-.epane { width:100%; display:flex; flex-direction:column; gap:.6rem; }
+/* ----- collapsible sections ----- */
+.fold { border:1px solid var(--glass-lo); border-radius:.75rem; margin-bottom:.45rem;
+  background:var(--glass-lo); overflow:hidden; }
+.fold.open { border-color:var(--hair); }
+.fold-head {
+  display:flex; align-items:center; gap:.55rem; width:100%;
+  padding:.6rem .85rem; border:0; background:transparent; cursor:pointer;
+  color:var(--text); font:inherit; font-size:.84rem; text-align:left;
+}
+.fold-head:hover { background:var(--glass); }
+.fold-chev { width:13px; height:13px; flex:none; color:var(--faint);
+  transition:transform .2s var(--ease); }
+.fold.open .fold-chev { transform:rotate(90deg); color:var(--brass); }
+.fold-title { font-weight:600; letter-spacing:.01em; }
+.fold-sub { color:var(--faint); font-size:.74rem; margin-left:auto; }
+.fold-body { padding:.2rem .85rem 1rem; }
+.fold .fold { background:transparent; }
 
-/* A save's document runs to a few thousand lines, so the box is tall enough
-   to work in and still resizable. */
-textarea.json {
-  width:100%; min-height:22rem; resize:vertical;
-  font-family:var(--mono); font-size:.76rem; line-height:1.55;
+.secnote {
+  margin:.2rem 0 .9rem; padding:.5rem .7rem;
+  border-left:2px solid var(--hair-hi); border-radius:0 .4rem .4rem 0;
+  background:var(--glass-lo); color:var(--dim);
+  font-size:.75rem; line-height:1.65;
+}
+
+/* ----- the field grid ----- */
+.fgrid {
+  display:grid; gap:.55rem .9rem;
+  grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));
+}
+.fgrid.tight { grid-template-columns:repeat(auto-fill,minmax(11rem,1fr)); gap:.4rem .7rem; }
+.frow { display:flex; flex-direction:column; gap:.2rem; min-width:0; }
+.frow.ro { opacity:.6; }
+.fl { display:flex; align-items:baseline; gap:.35rem; font-size:.72rem; color:var(--dim); }
+.flt { text-transform:lowercase; letter-spacing:.02em; }
+.flo { font-family:var(--mono); font-size:.64rem; color:var(--brass-lo); }
+.flq {
+  width:.95rem; height:.95rem; flex:none; border-radius:50%;
+  display:inline-grid; place-items:center; cursor:help;
+  border:1px solid var(--hair); color:var(--faint); font-size:.6rem;
+}
+
+.fin {
+  width:100%; min-width:0; padding:.4rem .6rem;
   color:var(--text); background:var(--glass-lo);
-  border:1px solid var(--glass-hi); border-radius:.6rem; padding:.8rem;
+  border:1px solid var(--glass-hi); border-radius:.45rem;
+  font:inherit; font-size:.8rem;
+}
+.fin:focus { outline:2px solid var(--brass-lo); outline-offset:1px; }
+.fin:disabled { opacity:.55; cursor:not-allowed; }
+.fin.num { font-variant-numeric:tabular-nums; }
+.fin.mono { font-family:var(--mono); font-size:.74rem; }
+.fin.narrow { max-width:8rem; }
+
+/* ----- named bits ----- */
+.bits { display:flex; flex-direction:column; gap:.3rem; }
+.bitrow { display:flex; flex-wrap:wrap; gap:.15rem .7rem; }
+.bit { display:inline-flex; align-items:center; gap:.3rem; cursor:pointer;
+  font-size:.7rem; color:var(--dim); }
+.bit input { position:absolute; opacity:0; width:0; height:0; }
+.bit .bx {
+  width:.85rem; height:.85rem; border-radius:.22rem; flex:none;
+  border:1px solid var(--hair-hi); background:var(--glass-lo);
+  transition:background .16s var(--ease), border-color .16s var(--ease);
+}
+.bit input:checked + .bx { background:var(--brass); border-color:var(--brass); }
+.bit input:focus-visible + .bx { outline:2px solid var(--brass); outline-offset:2px; }
+.hint.tiny { font-size:.68rem; }
+
+/* ----- combo box ----- */
+/* The choices are the point: an id typed into a number box is how somebody
+   equips a snack where they meant a keyblade. */
+.combo { position:relative; }
+.combo-in {
+  width:100%; min-width:0; padding:.4rem .6rem;
+  color:var(--text); background:var(--glass-lo);
+  border:1px solid var(--glass-hi); border-radius:.45rem;
+  font:inherit; font-size:.8rem;
+}
+.combo-in:focus { outline:2px solid var(--brass-lo); outline-offset:1px; }
+.combo-in.unknown { color:var(--proud); }
+.combo-list {
+  position:absolute; z-index:40; top:calc(100% + .2rem); left:0; right:0;
+  max-height:15rem; overflow:auto; padding:.2rem;
+  background:var(--glass-hi); border:1px solid var(--hair); border-radius:.55rem;
+  -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
+  box-shadow:var(--lift);
+}
+.combo-row {
+  display:flex; align-items:baseline; gap:.5rem; padding:.3rem .5rem;
+  border-radius:.35rem; cursor:pointer; font-size:.76rem;
+}
+.combo-row:hover, .combo-row.cur { background:var(--glass); }
+.combo-row.at { color:var(--brass-hi); }
+.combo-row .cn { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.combo-row .ci { font-family:var(--mono); font-size:.68rem; color:var(--faint); }
+.combo-empty { padding:.4rem .5rem; color:var(--faint); font-size:.74rem; }
+
+/* ----- sparse lists and equipment slots ----- */
+.sparse { display:flex; flex-direction:column; gap:.55rem; }
+.srows { display:flex; flex-direction:column; gap:.4rem; }
+.srow {
+  display:flex; align-items:flex-start; gap:.7rem;
+  padding:.5rem .6rem; border-radius:.55rem;
+  background:var(--glass-lo); border:1px solid transparent;
+}
+.srow:hover { border-color:var(--glass-hi); }
+.sname { flex:none; width:11rem; min-width:0; }
+.snt { display:block; font-size:.78rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sni { display:block; font-family:var(--mono); font-size:.66rem; color:var(--faint); }
+.srow .fgrid { flex:1; min-width:0; }
+.field.small { max-width:22rem; }
+.adder { display:flex; gap:.5rem; max-width:26rem; }
+.adder .combo { flex:1; }
+.page { margin-bottom:.7rem; }
+.pagelabel { font-size:.72rem; color:var(--faint); margin-bottom:.3rem;
+  text-transform:lowercase; letter-spacing:.02em; }
+
+/* ----- the validator's report ----- */
+.problems {
+  border-radius:.7rem; padding:.6rem .8rem; font-size:.78rem;
+  border:1px solid var(--hair); background:var(--glass-lo);
+}
+.problems.ok { color:var(--beginner); border-color:rgba(95,208,172,.24); }
+.problems.warn { border-color:rgba(226,188,118,.34); }
+.problems.bad { border-color:rgba(240,112,111,.4); }
+.problems > svg, .phead svg { width:14px; height:14px; flex:none; }
+.problems.ok { display:flex; align-items:center; gap:.5rem; }
+.phead { display:flex; align-items:center; gap:.5rem; font-weight:600; }
+.problems.warn .phead { color:var(--proud); }
+.problems.bad .phead { color:var(--critical); }
+.plist { display:flex; flex-direction:column; gap:.15rem; margin-top:.5rem;
+  max-height:13rem; overflow:auto; }
+.pitem {
+  display:flex; gap:.6rem; align-items:baseline; text-align:left;
+  padding:.25rem .4rem; border:0; border-radius:.35rem;
+  background:transparent; color:var(--dim); font:inherit; font-size:.74rem;
+  cursor:pointer;
+}
+.pitem:disabled { cursor:default; }
+.pitem:not(:disabled):hover { background:var(--glass); color:var(--text); }
+.pitem code { flex:none; max-width:16rem; overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap; font-family:var(--mono); font-size:.7rem; }
+.pitem.err code { color:var(--critical); }
+.pitem.warn code { color:var(--proud); }
+
+/* ----- the document view ----- */
+.jsonpane { display:flex; flex-direction:column; gap:.5rem; }
+.jtools { display:flex; gap:.45rem; align-items:center; flex-wrap:wrap; }
+select.scope {
+  padding:.35rem .6rem; border-radius:.45rem; font:inherit; font-size:.76rem;
+  color:var(--text); background:var(--glass-lo);
+  border:1px solid var(--glass-hi);
+}
+select.scope option { background:var(--ink-2); color:var(--text); }
+
+/* The textarea sits transparently over the highlighted <pre>. The two must
+   agree on every metric that moves a glyph, so they are declared together and
+   never separately: one different padding and the caret drifts a character
+   further from its text on every line. */
+.code {
+  display:flex; align-items:flex-start;
+  max-height:32rem; overflow:auto;
+  background:var(--glass-lo); border:1px solid var(--glass-hi);
+  border-radius:.6rem;
+  font-family:var(--mono); font-size:.76rem; line-height:1.55;
   tab-size:2;
 }
-textarea.json:focus { outline:2px solid var(--brass-lo); outline-offset:1px; }
+.code:focus-within { outline:2px solid var(--brass-lo); outline-offset:1px; }
+.gutter {
+  position:sticky; left:0; z-index:2; flex:none;
+  padding:.7rem .5rem .7rem .7rem; text-align:right;
+  color:var(--faint); background:var(--ink-2);
+  border-right:1px solid var(--glass-hi);
+  user-select:none;
+}
+.gl { font-variant-numeric:tabular-nums; position:relative; }
+.gl.err { color:var(--critical); font-weight:700; }
+.gl.warn { color:var(--proud); font-weight:700; }
+.gl.err::before, .gl.warn::before {
+  content:""; position:absolute; left:-.7rem; top:.35em;
+  width:3px; height:.8em; border-radius:2px; background:currentColor;
+}
+.code-body { position:relative; flex:1; min-width:max-content; }
+.code .hl, .code .code-in {
+  margin:0; padding:.7rem .9rem; border:0;
+  font:inherit; letter-spacing:normal;
+  white-space:pre; word-break:normal; overflow-wrap:normal;
+}
+.code .hl { color:var(--dim); pointer-events:none; }
+.code .code-in {
+  position:absolute; inset:0; width:100%; height:100%;
+  color:transparent; caret-color:var(--brass-hi); background:transparent;
+  resize:none; overflow:hidden; outline:none;
+}
+.code .code-in::selection { background:rgba(223,186,115,.3); color:transparent; }
+/* Above the highlight limit the pre carries the text itself, so it has to be
+   readable rather than a backdrop. */
+.code.plain .hl { color:var(--text); }
+
+.t-key { color:var(--brass); }
+.t-str { color:var(--beginner); }
+.t-num { color:var(--standard); }
+.t-lit { color:var(--proud); }
+
+.jstatus { font-size:.72rem; color:var(--faint); font-family:var(--mono); }
+.jstatus.bad { color:var(--critical); }
+.jstatus.ok { color:var(--faint); }
+
+.workfoot { display:flex; flex-direction:column; gap:.6rem;
+  border-top:1px solid var(--glass-lo); padding-top:.75rem; }
 
 @media (max-width:640px) {
   .drow { flex-direction:column; gap:.05rem; }
   .dk { width:auto; text-align:left; }
+  .srow { flex-direction:column; gap:.4rem; }
+  .sname { width:auto; }
+  .fgrid { grid-template-columns:1fr; }
 }
 
 /* -------------------------------------------------------------- motion -- */

@@ -104,6 +104,11 @@ type Schema struct {
 	DocFormat string              `json:"docFormat"`
 	Sections  []Section           `json:"sections"`
 	Tables    map[string][]TableE `json:"tables"`
+
+	// EquipTables is the type-byte dispatch, so an editor can offer the right
+	// list once a slot's type is chosen instead of one flat list of ids that
+	// mean different things.
+	EquipTables map[int]string `json:"equipTables"`
 }
 
 // TableE is one id/name pair of an enum table.
@@ -483,7 +488,8 @@ func charactersSection() Section {
 
 // Describe returns the whole schema, ready to serialize.
 func Describe() Schema {
-	return Schema{DocFormat: DocFormat, Sections: Sections(), Tables: Tables()}
+	return Schema{DocFormat: DocFormat, Sections: Sections(), Tables: Tables(),
+		EquipTables: EquipTables()}
 }
 
 // minigameSection is the eleven scalar records, one field each. They are named

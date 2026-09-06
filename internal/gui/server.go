@@ -36,6 +36,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/thirteenth-order/kh3-save-editor/internal/kh3"
@@ -51,6 +52,10 @@ type Server struct {
 	addr   string
 	mux    *http.ServeMux
 	folder *store
+
+	schemaOnce sync.Once
+	schemaJSON []byte
+	schemaErr  error
 }
 
 func newToken() string {
@@ -584,6 +589,29 @@ func (s *Server) handleDetail(w http.ResponseWriter, r *http.Request) {
 	w.Write(doc)
 }
 
+// handleSchema hands the interface the description of every editable field:
+// what each one is called in a dump, what kind of value it holds, which table
+// names its ids and what range the format allows. The page builds its editor
+// out of this rather than carrying a hand-written widget per field, which is
+// what keeps the two from drifting -- and kh3.Describe is the same description
+// the format tests hold against a dump.
+//
+// It is static for the life of the process, so it is worth caching: the enum
+// tables come to a few hundred kilobytes and the page asks for them once per
+// save it opens.
+func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
+	s.schemaOnce.Do(func() {
+		s.schemaJSON, s.schemaErr = json.Marshal(kh3.Describe())
+	})
+	if s.schemaErr != nil {
+		fail(w, http.StatusInternalServerError, "%v", s.schemaErr)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(s.schemaJSON)
+}
+
 // handlePatch applies a JSON document to a save, through exactly the same
 // validation the patch subcommand uses. This is what makes every field the
 // format layer knows about editable from the interface without the interface
@@ -639,6 +667,10 @@ func (s *Server) handlePatch(w http.ResponseWriter, r *http.Request) {
 var staticFiles = map[string]string{
 	"/":           "index.html",
 	"/app.css":    "app.css",
+	"/ui.js":      "ui.js",
+	"/editor.js":  "editor.js",
+	"/schema.js":  "schema.js",
+	"/forms.js":   "forms.js",
 	"/app.js":     "app.js",
 	"/icon.svg":   "icon.svg",
 	"/emblem.svg": "emblem.svg",
@@ -697,6 +729,7 @@ func Serve(noBrowser bool, addr string) error {
 	s.mux.HandleFunc("/", s.guard(s.handleIndex))
 	s.mux.HandleFunc("/api/scan", s.guard(s.handleScan))
 	s.mux.HandleFunc("/api/swap", s.guard(s.handleSwap))
+	s.mux.HandleFunc("/api/schema", s.guard(s.handleSchema))
 	s.mux.HandleFunc("/api/detail", s.guard(s.handleDetail))
 	s.mux.HandleFunc("/api/patch", s.guard(s.handlePatch))
 	s.mux.HandleFunc("/api/browse", s.guard(s.handleBrowse))

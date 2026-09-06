@@ -1,15 +1,8 @@
-// kh3save UI. No framework and no build step: the whole page is a few hundred
-// lines of DOM calls against the local API described in server.go.
+// kh3save UI. No framework and no build step: the page is a few DOM calls
+// against the local API described in server.go, split across four assets --
+// ui.js for the primitives, editor.js for the JSON editor, schema.js and
+// forms.js for the schema-driven half, and this file for the shell.
 "use strict";
-
-const TOKEN = new URLSearchParams(location.search).get("t") || "";
-
-// The token stays in the address bar deliberately. Scrubbing it with
-// history.replaceState keeps it out of browser history, but then a reload has
-// no token and the page dies on a bare 403 with no way back. The trade is not
-// worth it: the token is 32 bytes of crypto/rand, minted per run and dead the
-// moment the process exits, so a stale copy in history cannot be replayed.
-// Reload working matters more than hiding a value that expires on exit.
 
 // Difficulty is the one axis the whole page turns on, so name, color and
 // sigil live together and everything else indexes into this.
@@ -30,146 +23,9 @@ const DIFFS = [
 const CRITICAL = 3;
 
 const app = document.getElementById("app");
-const toasts = document.getElementById("toasts");
-const modal = document.getElementById("modal");
 const topbar = document.getElementById("topbar");
 
-// An <img> cannot set the token header, so it travels in the query string.
-// Same gate, same value, just the transport the tag supports.
-const EMBLEM = "/emblem.svg?t=" + encodeURIComponent(TOKEN);
 for (const img of document.querySelectorAll("img.mark")) img.src = EMBLEM;
-
-/* ------------------------------------------------------------- plumbing -- */
-
-async function api(path, body) {
-  const r = await fetch(path, {
-    method: body === undefined ? "GET" : "POST",
-    headers: { "X-KH3-Token": TOKEN, "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const data = await r.json().catch(() => ({ error: r.statusText }));
-  if (!r.ok) throw new Error(data.error || r.statusText);
-  return data;
-}
-
-function el(tag, cls, text) {
-  const n = document.createElement(tag);
-  if (cls) n.className = cls;
-  if (text != null) n.textContent = text;
-  return n;
-}
-
-// <use> into the sprite in index.html, so an icon costs one small element.
-function icon(name) {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-  use.setAttribute("href", "#" + name);
-  svg.append(use);
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("focusable", "false");
-  return svg;
-}
-
-function chip(name, text, cls) {
-  const n = el("span", "chip" + (cls ? " " + cls : ""));
-  if (name) n.append(icon(name));
-  n.append(el("span", null, text));
-  return n;
-}
-
-function pill(text, name, cls) {
-  const b = el("button", "pill" + (cls ? " " + cls : ""));
-  b.type = "button";
-  if (name) b.append(icon(name));
-  if (text) b.append(el("span", null, text));
-  return b;
-}
-
-function toast(text, kind) {
-  const n = el("div", "toast" + (kind ? " " + kind : ""));
-  n.append(icon(kind === "bad" ? "i-alert" : kind === "good" ? "i-check" : "i-sparkle"),
-           el("span", null, text));
-  toasts.append(n);
-  setTimeout(function () {
-    n.classList.add("out");
-    setTimeout(function () { n.remove(); }, 320);
-  }, 4600);
-}
-
-function copyToClipboard(text) {
-  if (!navigator.clipboard) { toast("Clipboard is not available here", "bad"); return; }
-  navigator.clipboard.writeText(text).then(
-    function () { toast("Path copied", "good"); },
-    function () { toast("Could not copy the path", "bad"); });
-}
-
-// Stagger the entrance so a list of saves cascades rather than snapping in.
-function stagger(parent) {
-  parent.classList.add("stagger");
-  Array.prototype.forEach.call(parent.children, function (node, i) {
-    node.style.setProperty("--n", Math.min(i, 10));
-  });
-}
-
-/* ---------------------------------------------------------------- modal -- */
-// Replaces window.confirm(). The native dialog blocks the whole page and
-// cannot show the change list with any structure; this can, and it inherits
-// Esc, focus trapping and the backdrop for free from <dialog>.
-
-const modalYes = document.getElementById("modalYes");
-const modalNo = document.getElementById("modalNo");
-
-function ask(opts) {
-  return new Promise(function (resolve) {
-    let settled = false;
-    function finish(ok) {
-      if (settled) return;
-      settled = true;
-      modal.close();
-      resolve(ok);
-    }
-
-    document.getElementById("modalTitle").textContent = opts.title;
-    document.getElementById("modalSub").textContent = opts.sub;
-
-    const swap = document.getElementById("modalSwap");
-    swap.innerHTML = "";
-    if (opts.from != null) {
-      const a = chip(DIFFS[opts.from].sig, DIFFS[opts.from].name, "hue");
-      a.style.setProperty("--c", DIFFS[opts.from].hue);
-      const arrow = icon("i-chev");
-      arrow.setAttribute("class", "arrow-mark");
-      const b = chip(DIFFS[opts.to].sig, DIFFS[opts.to].name, "hue");
-      b.style.setProperty("--c", DIFFS[opts.to].hue);
-      swap.append(a, arrow, b);
-    }
-
-    const body = document.getElementById("modalBody");
-    body.innerHTML = "";
-    body.append(el("pre", "log", opts.lines.length ? opts.lines.join("\n") : "no changes"));
-
-    modalYes.onclick = function () { finish(true); };
-    modalNo.onclick = function () { finish(false); };
-    modal.onclose = function () { finish(false); };
-    // Clicking the dimmed backdrop is the same as canceling.
-    modal.onclick = function (e) { if (e.target === modal) finish(false); };
-
-    modal.showModal();
-    modalNo.focus();
-  });
-}
-
-/* -------------------------------------------------------------- banners -- */
-
-function banner(tone, name, title, text) {
-  const n = el("div", "banner " + tone);
-  const badge = el("div", "ico");
-  badge.append(icon(name));
-  const copy = el("div");
-  copy.append(el("b", null, title), el("p", null, text));
-  n.append(badge, copy);
-  return n;
-}
 
 /* ---------------------------------------------------- segmented control -- */
 
@@ -312,7 +168,7 @@ function slotCard(slot, index) {
                    document.createTextNode(DIFFS[picked].name));
       hint.append(arrow);
     } else if (itemOnly) {
-      hint.append(document.createTextNode("add the missing Soldier\u2019s Earring"));
+      hint.append(document.createTextNode("add the missing Soldier’s Earring"));
     } else {
       hint.append(document.createTextNode("current setting"));
     }
@@ -367,7 +223,7 @@ function slotCard(slot, index) {
       box.classList.add("done");
       setTimeout(function () { box.classList.remove("done"); }, 1000);
       toast(sameDifficulty
-        ? slot.slot + " got its Soldier\u2019s Earring"
+        ? slot.slot + " got its Soldier’s Earring"
         : slot.slot + " is now " + DIFFS[picked].name, "good");
     } catch (e) {
       out.append(el("div", "hint err", e.message));
@@ -379,15 +235,15 @@ function slotCard(slot, index) {
 
   const act = el("div", "act");
   act.append(apply, hint);
-  box.append(seg.node, extras, act, out, detailsPanel(slot));
+  box.append(seg.node, extras, act, out, editorPanel(slot));
   return box;
 }
 
 /* -------------------------------------------------------------- details -- */
-// Everything the format layer knows about a save, shown as a summary and
-// offered for editing as the same JSON document the dump and patch
-// subcommands use. The interface does not grow a widget per field: the
-// document is the surface, and it is validated by the same code either way.
+// Everything the format layer knows about a save: a summary to read, a form
+// built out of the published schema to edit, and the document itself for the
+// bulk edits a form is bad at. All three are the same JSON the dump and patch
+// subcommands use, so none of them can validate differently from the CLI.
 //
 // Every value below reaches the DOM through textContent. Map paths and folder
 // names come out of the save file, so they are attacker-controlled text.
@@ -406,8 +262,8 @@ function named(section, extra) {
   return Object.keys(section)
     .sort(function (a, b) { return Number(a) - Number(b); })
     .map(function (k) {
-      const e = section[k];
-      return e.name + (extra ? extra(e) : "");
+      const ent = section[k];
+      return ent.name + (extra ? extra(ent) : "");
     })
     .join(", ");
 }
@@ -424,17 +280,22 @@ function live(section, isSet) {
 function summary(doc) {
   const wrap = el("div", "detail");
   const h = doc.header || {};
+  const recs = doc.records || {};
 
   const rows = [
     row("world", h.world_logo_name),
     row("location", h.location_name),
     row("map", h.map_path),
+    row("spawn", h.map_spawn),
     row("save icon", h.save_icon_name),
     row("party", named(live(doc.party, function (e) { return e.id !== 0; }))),
     row("magic", named(live(doc.magic, function (e) { return e.id !== 0; }))),
     row("links", named(live(doc.links, function (e) { return e.id !== 0; }))),
     row("materials", named(doc.materials, function (e) { return " ×" + e.count; })),
     row("story", named(doc.story_flags, function (e) { return " " + e.value; })),
+    row("attractions", named(live(recs.attractions, function (e) { return e.uses > 0; }),
+      function (e) { return e.high_score ? " best " + e.high_score : ""; })),
+    row("shotlocks", named(recs.shotlocks, function (e) { return " ×" + e.uses; })),
     row("crabs", h.crabs ? String(h.crabs) : ""),
     row("enemies defeated", h.enemies_defeated ? String(h.enemies_defeated) : ""),
   ];
@@ -445,7 +306,7 @@ function summary(doc) {
     const worn = [];
     for (const kind of ["weapons", "armor", "accessories", "items"]) {
       const g = (c.equipment || {})[kind] || {};
-      for (const s of Object.keys(g).sort()) worn.push(g[s].name);
+      for (const s of Object.keys(g).sort()) if (g[s]) worn.push(g[s].name);
     }
     if (!worn.length) continue;
     const r = row(name, "hp " + c.hp + " mp " + c.mp + " — " + worn.join(", "));
@@ -454,23 +315,33 @@ function summary(doc) {
   return wrap;
 }
 
-function detailsPanel(slot) {
+// editorPanel is the whole detail view for one save: three tabs over one
+// document, and one footer that validates and writes it.
+function editorPanel(slot) {
   const wrap = el("div", "details");
-  const toggle = pill("Details", "i-search", "quiet");
+  const toggle = pill("Open editor", "i-slider", "quiet");
   const body = el("div", "dbody");
   body.hidden = true;
-  let loaded = false;
+  let built = false;
 
   toggle.onclick = async function () {
-    if (loaded) { body.hidden = !body.hidden; return; }
+    if (built) {
+      body.hidden = !body.hidden;
+      toggle.lastChild.textContent = body.hidden ? "Open editor" : "Close editor";
+      return;
+    }
     toggle.disabled = true;
+    toggle.lastChild.textContent = "Loading…";
     try {
+      await loadSchema();
       const doc = await api("/api/detail?path=" + encodeURIComponent(slot.path));
-      body.append(summary(doc), jsonEditor(slot, doc));
-      loaded = true;
+      body.append(buildWorkbench(slot, doc));
+      built = true;
       body.hidden = false;
+      toggle.lastChild.textContent = "Close editor";
     } catch (e) {
       toast(e.message, "bad");
+      toggle.lastChild.textContent = "Open editor";
     }
     toggle.disabled = false;
   };
@@ -479,43 +350,103 @@ function detailsPanel(slot) {
   return wrap;
 }
 
-function jsonEditor(slot, doc) {
-  const wrap = el("div", "editor");
-  const open = pill("Edit as JSON", "i-slider", "quiet");
-  const pane = el("div", "epane");
-  pane.hidden = true;
+function clone(v) { return JSON.parse(JSON.stringify(v)); }
 
-  const area = el("textarea", "json");
-  area.spellcheck = false;
-  area.value = JSON.stringify(doc, null, 2);
+function buildWorkbench(slot, loaded) {
+  const state = {
+    doc: loaded,
+    saved: clone(loaded),
+    // A save that stops before the record block has no bests in its dump, and
+    // the editor must say so rather than offering controls that fail on write.
+    caps: { records: !!(loaded.records && loaded.records.minigames) },
+    dirty: false,
+  };
 
-  const note = el("div", "hint",
-    "Keys you delete are left alone. Everything here goes through the same " +
-    "checks as the patch subcommand, and a timestamped backup is written " +
-    "before anything is touched.");
+  const wrap = el("div", "work");
+  const tabs = el("div", "tabs");
+  const panes = el("div", "panes");
+  const problemBar = el("div", "problems");
+  const foot = el("div", "workfoot");
 
-  const preview = pill("Preview", "i-search", "quiet");
+  let jsonView = null;
+  let current = "overview";
+
+  function rebuildOverview() {
+    const pane = el("div", "pane");
+    pane.append(summary(state.doc));
+    return pane;
+  }
+
+  function rebuildForm() {
+    const pane = el("div", "pane");
+    pane.append(buildForm({
+      doc: state.doc,
+      caps: state.caps,
+      edited: function () { state.dirty = true; check(); },
+    }));
+    return pane;
+  }
+
+  function rebuildJSON() {
+    const pane = el("div", "pane");
+    jsonView = jsonPane(state, check);
+    pane.append(jsonView.node);
+    return pane;
+  }
+
+  const builders = { overview: rebuildOverview, edit: rebuildForm, json: rebuildJSON };
+  const tabButtons = {};
+
+  function show(name) {
+    // Leaving the JSON tab commits whatever is in the box, so an edit made
+    // there is visible in the form and the summary. Text that does not parse
+    // cannot be committed, and says so rather than being thrown away.
+    if (current === "json" && jsonView && !jsonView.commit()) return;
+    current = name;
+    for (const k of Object.keys(tabButtons)) {
+      tabButtons[k].setAttribute("aria-selected", k === name ? "true" : "false");
+    }
+    panes.innerHTML = "";
+    if (name !== "json") jsonView = null;
+    panes.append(builders[name]());
+    check();
+  }
+
+  for (const tab of [["overview", "Summary", "i-search"],
+                     ["edit", "Fields", "i-slider"],
+                     ["json", "Document", "i-code"]]) {
+    const b = pill(tab[1], tab[2], "tab");
+    b.setAttribute("role", "tab");
+    b.onclick = function () { show(tab[0]); };
+    tabButtons[tab[0]] = b;
+    tabs.append(b);
+  }
+
+  /* -- validation and writing -- */
+
+  const preview = pill("Preview changes", "i-search", "quiet");
   const write = pill("Apply", "i-check", "go");
+  const revert = pill("Revert", "i-refresh", "quiet");
   const log = el("div");
 
-  function parsed() {
-    try {
-      return JSON.parse(area.value);
-    } catch (e) {
-      toast("That is not valid JSON: " + e.message, "bad");
-      return null;
-    }
+  function check() {
+    const problems = validate(state.doc, state.caps);
+    paintProblems(problemBar, problems, jsonView);
+    if (jsonView) jsonView.markProblems(problems);
+    const errs = problems.filter(function (p) { return p.severity !== "warn"; }).length;
+    write.disabled = errs > 0;
+    revert.disabled = !state.dirty;
+    write.title = errs ? "fix the errors above first" : "";
+    return problems;
   }
 
   async function send(dry) {
-    const body = parsed();
-    if (body === null) return;
     log.innerHTML = "";
     try {
-      const res = await api("/api/patch", { path: slot.path, doc: body, dryRun: dry });
+      const res = await api("/api/patch", { path: slot.path, doc: state.doc, dryRun: dry });
       if (!res.changes || !res.changes.length) {
         log.append(el("div", "hint", "Nothing would change."));
-        return;
+        return null;
       }
       log.append(el("pre", "log", res.changes.join("\n")));
       if (res.backup) {
@@ -523,25 +454,22 @@ function jsonEditor(slot, doc) {
         done.append(chip("i-shield", "backup → " + res.backup, "mono path"));
         log.append(done);
         toast(slot.slot + " updated", "good");
+        state.saved = clone(state.doc);
+        state.dirty = false;
+        check();
       }
+      return res.changes;
     } catch (e) {
       log.append(el("div", "hint err", e.message));
       toast(e.message, "bad");
+      return null;
     }
   }
 
-  preview.onclick = function () { send(true); };
+  preview.onclick = function () { if (check() !== null) send(true); };
   write.onclick = async function () {
-    const body = parsed();
-    if (body === null) return;
-    let changes = [];
-    try {
-      changes = (await api("/api/patch", { path: slot.path, doc: body, dryRun: true })).changes || [];
-    } catch (e) {
-      toast(e.message, "bad");
-      return;
-    }
-    if (!changes.length) { toast("Nothing would change"); return; }
+    const changes = await send(true);
+    if (!changes) return;
     const ok = await ask({
       title: "Apply " + changes.length + " change" + (changes.length === 1 ? "" : "s") +
         " to " + slot.slot + "?",
@@ -551,14 +479,202 @@ function jsonEditor(slot, doc) {
     });
     if (ok) send(false);
   };
-
-  open.onclick = function () { pane.hidden = !pane.hidden; };
+  revert.onclick = function () {
+    state.doc = clone(state.saved);
+    state.dirty = false;
+    panes.innerHTML = "";
+    if (current === "json") jsonView = null;
+    panes.append(builders[current]());
+    check();
+    toast("Back to what is on disk");
+  };
 
   const acts = el("div", "act");
-  acts.append(preview, write);
-  pane.append(area, note, acts, log);
-  wrap.append(open, pane);
+  acts.append(preview, write, revert);
+  foot.append(el("p", "hint",
+    "Keys left out are left alone. Everything here goes through the same checks " +
+    "as the patch subcommand, and a timestamped backup is written before " +
+    "anything is touched."), acts, log);
+
+  wrap.append(tabs, problemBar, panes, foot);
+  show("overview");
   return wrap;
+}
+
+// paintProblems is the validator's report. It mirrors what the server would
+// say, so a mistake shows up while it is being typed rather than after a round
+// trip -- but the server still has the last word, and nothing is written
+// without its dry run agreeing.
+function paintProblems(bar, problems, jsonView) {
+  bar.innerHTML = "";
+  if (!problems.length) {
+    bar.className = "problems ok";
+    bar.append(icon("i-check"), el("span", null, "The document checks out."));
+    return;
+  }
+  const errs = problems.filter(function (p) { return p.severity !== "warn"; });
+  bar.className = "problems " + (errs.length ? "bad" : "warn");
+  const head = el("div", "phead");
+  head.append(icon(errs.length ? "i-alert" : "i-warn"),
+    el("span", null, errs.length
+      ? errs.length + (errs.length === 1 ? " problem" : " problems") +
+        (problems.length > errs.length ? ", " + (problems.length - errs.length) + " to look at" : "")
+      : problems.length + (problems.length === 1 ? " thing" : " things") + " to look at"));
+  bar.append(head);
+
+  const list = el("div", "plist");
+  for (const p of problems.slice(0, 40)) {
+    const item = el("button", "pitem " + (p.severity === "warn" ? "warn" : "err"));
+    item.type = "button";
+    item.append(el("code", null, p.path || "document"), el("span", null, p.message));
+    if (jsonView && p.line) item.onclick = function () { jsonView.goToLine(p.line); };
+    else item.disabled = true;
+    list.append(item);
+  }
+  if (problems.length > 40) list.append(el("p", "hint", (problems.length - 40) + " more"));
+  bar.append(list);
+}
+
+/* ---------------------------------------------------------- json editor -- */
+
+// jsonPane is the document view: a scope picker, the code editor, and the
+// glue that keeps the text and the document in step. Scoping exists because a
+// whole dump is a lot of text to hunt through when the thing being changed is
+// one character's abilities, and Patch reads a partial document anyway.
+function jsonPane(state, check) {
+  const wrap = el("div", "jsonpane");
+
+  const scopes = [{ key: "", label: "Whole document" }];
+  for (const sec of SCHEMA.sections) {
+    if (state.doc[sec.key] === undefined) continue;
+    scopes.push({ key: sec.key, label: sec.label || sec.key });
+    if (sec.shape !== "names") continue;
+    for (const name of sec.keys) {
+      if (state.doc[sec.key][name] === undefined) continue;
+      scopes.push({ key: sec.key + "." + name, label: "  " + (sec.label || sec.key) + " · " + name });
+    }
+  }
+
+  let scope = "";
+  const picker = document.createElement("select");
+  picker.className = "scope";
+  picker.setAttribute("aria-label", "Which part of the document to edit");
+  for (const s of scopes) {
+    const opt = document.createElement("option");
+    opt.value = s.key;
+    opt.textContent = s.label;
+    picker.append(opt);
+  }
+
+  function subtree() {
+    if (!scope) return state.doc;
+    const parts = scope.split(".");
+    let at = state.doc;
+    for (const p of parts) at = at[p];
+    return at;
+  }
+
+  function putSubtree(v) {
+    if (!scope) { state.doc = v; return; }
+    const parts = scope.split(".");
+    let at = state.doc;
+    for (let i = 0; i < parts.length - 1; i++) at = at[parts[i]];
+    at[parts[parts.length - 1]] = v;
+  }
+
+  let lines = new Map();
+  let parseProblem = null;
+
+  const code = codeEditor({
+    value: JSON.stringify(subtree(), null, 2),
+    onChange: function () { debounce(); },
+  });
+
+  const status = el("div", "jstatus");
+
+  let timer = null;
+  function debounce() {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(function () { timer = null; sync(); }, 140);
+  }
+
+  // sync parses the text and, when it parses, puts it back into the document
+  // so the other two tabs and the validator see it. A document that does not
+  // parse leaves the last good one alone: half-typed text is not an edit.
+  function sync() {
+    const text = code.get();
+    try {
+      const value = JSON.parse(text);
+      parseProblem = null;
+      putSubtree(value);
+      state.dirty = true;
+      lines = indexLines(text);
+      status.className = "jstatus ok";
+      status.textContent = text.length.toLocaleString() + " characters, " +
+        text.split("\n").length.toLocaleString() + " lines";
+      check();
+    } catch (e) {
+      parseProblem = parseError(text, e);
+      lines = new Map();
+      status.className = "jstatus bad";
+      status.textContent = parseProblem.at
+        ? "line " + parseProblem.at.line + ": " + parseProblem.message
+        : parseProblem.message;
+      code.mark(parseProblem.at ? [{ line: parseProblem.at.line, severity: "err" }] : []);
+    }
+  }
+
+  picker.onchange = function () {
+    if (!commit()) { picker.value = scope; return; }
+    scope = picker.value;
+    code.set(JSON.stringify(subtree(), null, 2));
+    sync();
+  };
+
+  const tools = el("div", "jtools");
+  const fmt = pill("Format", "i-code", "quiet tiny");
+  fmt.onclick = function () {
+    if (!commit()) return;
+    code.set(JSON.stringify(subtree(), null, 2));
+    sync();
+  };
+  const copy = pill("Copy", "i-copy", "quiet tiny");
+  copy.onclick = function () { copyToClipboard(code.get(), "Document"); };
+  tools.append(picker, fmt, copy);
+
+  // commit is what the tab bar calls before leaving: it refuses to throw away
+  // text that does not parse.
+  function commit() {
+    if (timer) { clearTimeout(timer); timer = null; }
+    sync();
+    if (!parseProblem) return true;
+    toast("That is not valid JSON yet: " + parseProblem.message, "bad");
+    return false;
+  }
+
+  sync();
+  wrap.append(tools, code.node, status);
+  return {
+    node: wrap,
+    commit: commit,
+    goToLine: function (n) { code.goToLine(n); },
+    // markProblems maps a validated path back to the line it sits on, which is
+    // only possible while the text parses and only for the scope on screen.
+    markProblems: function (problems) {
+      if (parseProblem) return;
+      const marks = [];
+      for (const p of problems) {
+        const rel = scope && p.path.indexOf(scope + ".") === 0
+          ? p.path.slice(scope.length + 1) : (scope ? null : p.path);
+        if (rel === null) continue;
+        const line = lines.get(rel);
+        if (!line) continue;
+        p.line = line;
+        marks.push({ line: line, severity: p.severity });
+      }
+      code.mark(marks);
+    },
+  };
 }
 
 /* -------------------------------------------------------------- folders -- */
@@ -581,7 +697,7 @@ function folderPanel(canBrowse, dirs) {
     const copy = pill(null, "i-copy", "quiet round tiny");
     copy.title = "copy this path";
     copy.setAttribute("aria-label", "Copy path");
-    copy.onclick = function () { copyToClipboard(d.path); };
+    copy.onclick = function () { copyToClipboard(d.path, "Path"); };
     acts.append(copy);
 
     if (d.platform === "added" || d.archive) {
@@ -653,26 +769,6 @@ function folderPanel(canBrowse, dirs) {
 
 /* --------------------------------------------------------------- layout -- */
 
-function heading(name, text) {
-  const h = el("h2");
-  h.append(icon(name), el("span", null, text));
-  return h;
-}
-
-// The label wraps its own input, so these need no ids and can be built once
-// per save rather than once per page.
-function optionSwitch(html, on) {
-  const label = el("label", "opt");
-  const input = document.createElement("input");
-  input.type = "checkbox";
-  input.checked = !!on;
-  const track = el("span", "track");
-  const copy = el("span");
-  copy.innerHTML = html;
-  label.append(input, track, copy);
-  return { node: label, input: input };
-}
-
 async function render() {
   let data;
   try {
@@ -723,7 +819,7 @@ async function render() {
   app.append(heading("i-stack", "Saves"));
   const saves = el("div");
   let n = 0;
-  for (const d of data.dirs) for (const slot of d.slots) saves.append(slotCard(slot, n++));
+  for (const d of data.dirs) for (const s of d.slots) saves.append(slotCard(s, n++));
   stagger(saves);
   app.append(saves);
 
