@@ -72,13 +72,21 @@ function segment(currentIndex, onPick) {
   return { node: seg, repaint: function (now) { currentIndex = now; picked = now; paint(); } };
 }
 
+
 /* ---------------------------------------------------------------- slots -- */
+// A card is navigation. It carries enough to tell one save from another --
+// who, where, how far -- and every control that writes to the file lives in
+// the workspace it opens. The difficulty swap used to sit right here on the
+// front page, which is what made a tool that maps the whole format read as a
+// difficulty switcher with an editor bolted onto the side.
 
 function slotCard(slot, index) {
   const box = el("div", "slot");
   const head = el("div", "slot-head");
   head.append(el("div", "idx", String(index + 1).padStart(2, "0")));
 
+  // A slot that will not open is not navigation, so it stays inert and says
+  // why rather than offering a workspace that cannot be built.
   if (slot.error) {
     const bad = el("div", "cur");
     bad.style.setProperty("--c", "var(--critical)");
@@ -92,49 +100,75 @@ function slotCard(slot, index) {
     return box;
   }
 
-  if (slot.slot === "system") {
-    const sys = el("div", "cur");
-    sys.style.setProperty("--c", "var(--dim)");
-    sys.append(icon("i-slider"), el("span", null, "system"));
-    head.append(sys);
-    box.append(head);
-    const facts = el("div", "facts");
-    facts.append(chip("i-stack", "shared config"), chip(null, "no difficulty"));
-    box.append(facts);
-    return box;
-  }
-
-  const tone = diffMeta(slot.difficulty).hue;
+  // The system file has no difficulty and no characters, and Dump stops at
+  // the difficulty byte for it. It still opens: the header it does carry is
+  // editable, and a card that refused would be lying about that.
+  const system = slot.slot === "system";
+  const tone = system ? "var(--dim)" : diffMeta(slot.difficulty).hue;
   box.style.setProperty("--c", tone);
 
   const cur = el("div", "cur");
   cur.style.setProperty("--c", tone);
-  const curIcon = icon(diffMeta(slot.difficulty).sig);
-  cur.append(curIcon, el("span", null, slot.difficultyName));
+  cur.append(icon(system ? "i-slider" : diffMeta(slot.difficulty).sig),
+             el("span", null, system ? "system" : slot.difficultyName));
   head.append(cur, el("div", "grow"));
   if (slot.path.indexOf(".zip!") > -1) head.append(chip("i-archive", "in zip", "hue archive"));
   head.append(chip(null, slot.slot, "mono"));
+  const go = icon("i-chev");
+  go.setAttribute("class", "slot-go");
+  head.append(go);
   box.append(head);
 
   const facts = el("div", "facts");
-  facts.append(
-    chip("i-level", "level " + slot.level),
-    chip("i-clock", slot.playtime),
-    chip("i-coin", slot.munny + " munny"));
-  // A save that has not reached a named map yet would otherwise render an
-  // empty pill with nothing but the pin in it.
-  if (slot.location) facts.append(chip("i-pin", slot.location, "mono"));
+  if (system) {
+    facts.append(chip("i-stack", "shared config"), chip(null, "no difficulty"));
+  } else {
+    facts.append(
+      chip("i-level", "level " + slot.level),
+      chip("i-clock", slot.playtime),
+      chip("i-coin", slot.munny + " munny"));
+    if (slot.world) facts.append(chip("i-sparkle", slot.world));
+    // A save that has not reached a named map yet would otherwise render an
+    // empty pill with nothing but the pin in it.
+    if (slot.location) facts.append(chip("i-pin", slot.location, "mono"));
+  }
   box.append(facts);
 
+  // The whole card is the target rather than a button inside it: the card is
+  // one idea, and a hit area that covers only part of it reads as a bug.
+  box.classList.add("nav");
+  box.tabIndex = 0;
+  box.setAttribute("role", "button");
+  box.setAttribute("aria-label", "Open " + slot.slot);
+  box.onclick = function () { openWorkspace(slot); };
+  box.onkeydown = function (e) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    openWorkspace(slot);
+  };
+  return box;
+}
+
+/* --------------------------------------------------------- difficulty -- */
+// The swap, lifted out of the card and into the workspace it belongs to. It
+// is one action among many now rather than the whole front page, but it is
+// still the only one that reasons about the save rather than about a field: a
+// difficulty change moves HP, MP and three ability words as well as the flag,
+// so a document already on screen is stale the moment it lands. The workspace
+// reloads rather than trying to patch its own copy, and unsaved edits are
+// called out before that happens rather than vanishing.
+
+function difficultyPanel(slot, session, onSwapped) {
+  const wrap = el("div", "dpanel");
   const apply = pill("Apply", "i-check", "go");
   const hint = el("span", "hint");
   const out = el("div");
 
   // The Soldier's Earring is the one thing Critical starts with that the
   // difficulty flag does not carry, so it is the only choice a swap has. Both
-  // switches live in the save they act on, appear only when they would change
-  // something, and start in the state that matches what the game would have
-  // done: Critical hands the earring out, leaving Critical takes it back.
+  // switches appear only when they would change something, and start in the
+  // state that matches what the game would have done: Critical hands the
+  // earring out, leaving Critical takes it back.
   const extras = el("div", "extras");
   const grant = optionSwitch(
     "Add the Soldier&rsquo;s Earring that Critical starts with (+6&nbsp;AP)", true);
@@ -193,7 +227,12 @@ function slotCard(slot, index) {
       const preview = await api("/api/swap", Object.assign({}, opts, { dryRun: true }));
       const ok = await ask({
         title: (sameDifficulty ? "Update " : "Change ") + slot.slot + "?",
-        sub: "A timestamped backup is written before anything is touched.",
+        // A swap writes the file, so whatever is unsaved in the editor is
+        // about to be measured against a save it no longer describes. Saying
+        // so here is cheaper than discovering it after the reload.
+        sub: session.dirty()
+          ? "A timestamped backup is written first. Unsaved edits in the editor will be dropped: the file changes underneath them."
+          : "A timestamped backup is written before anything is touched.",
         // Nothing to show as a transition when only the inventory changes.
         from: sameDifficulty ? null : slot.difficulty, to: picked,
         lines: preview.changes,
@@ -215,16 +254,12 @@ function slotCard(slot, index) {
 
       slot.difficulty = picked;
       slot.difficultyName = DIFFS[picked].name;
-      curIcon.firstChild.setAttribute("href", "#" + DIFFS[picked].sig);
-      cur.lastChild.textContent = slot.difficultyName;
-      cur.style.setProperty("--c", DIFFS[picked].hue);
-      box.style.setProperty("--c", DIFFS[picked].hue);
       seg.repaint(picked);
-      box.classList.add("done");
-      setTimeout(function () { box.classList.remove("done"); }, 1000);
       toast(sameDifficulty
         ? slot.slot + " got its Soldier’s Earring"
         : slot.slot + " is now " + DIFFS[picked].name, "good");
+      onSwapped();
+      return;
     } catch (e) {
       out.append(el("div", "hint err", e.message));
       toast(e.message, "bad");
@@ -235,10 +270,9 @@ function slotCard(slot, index) {
 
   const act = el("div", "act");
   act.append(apply, hint);
-  box.append(seg.node, extras, act, out, editorPanel(slot));
-  return box;
+  wrap.append(seg.node, extras, act, out);
+  return wrap;
 }
-
 /* -------------------------------------------------------------- details -- */
 // Everything the format layer knows about a save: a summary to read, a form
 // built out of the published schema to edit, and the document itself for the
@@ -314,45 +348,9 @@ function summary(doc) {
   }
   return wrap;
 }
-
-// editorPanel is the whole detail view for one save: three tabs over one
-// document, and one footer that validates and writes it.
-function editorPanel(slot) {
-  const wrap = el("div", "details");
-  const toggle = pill("Open editor", "i-slider", "quiet");
-  const body = el("div", "dbody");
-  body.hidden = true;
-  let built = false;
-
-  toggle.onclick = async function () {
-    if (built) {
-      body.hidden = !body.hidden;
-      toggle.lastChild.textContent = body.hidden ? "Open editor" : "Close editor";
-      return;
-    }
-    toggle.disabled = true;
-    toggle.lastChild.textContent = "Loading…";
-    try {
-      await loadSchema();
-      const doc = await api("/api/detail?path=" + encodeURIComponent(slot.path));
-      body.append(buildWorkbench(slot, doc));
-      built = true;
-      body.hidden = false;
-      toggle.lastChild.textContent = "Close editor";
-    } catch (e) {
-      toast(e.message, "bad");
-      toggle.lastChild.textContent = "Open editor";
-    }
-    toggle.disabled = false;
-  };
-
-  wrap.append(toggle, body);
-  return wrap;
-}
-
 function clone(v) { return JSON.parse(JSON.stringify(v)); }
 
-function buildWorkbench(slot, loaded) {
+function buildWorkbench(slot, loaded, session) {
   const state = {
     doc: loaded,
     saved: clone(loaded),
@@ -361,6 +359,9 @@ function buildWorkbench(slot, loaded) {
     caps: { records: !!(loaded.records && loaded.records.minigames) },
     dirty: false,
   };
+  // The difficulty swap writes the file directly, so it has to know
+  // whether there is unsaved work in here before it does.
+  session.dirty = function () { return state.dirty; };
 
   const wrap = el("div", "work");
   const tabs = el("div", "tabs");
@@ -676,7 +677,6 @@ function jsonPane(state, check) {
     },
   };
 }
-
 /* -------------------------------------------------------------- folders -- */
 
 function folderPanel(canBrowse, dirs) {
@@ -767,19 +767,162 @@ function folderPanel(canBrowse, dirs) {
   return wrap;
 }
 
-/* --------------------------------------------------------------- layout -- */
+/* ------------------------------------------------------------ workspace -- */
+// One save, opened. The list is navigation; this is where a file is read and
+// written. Everything the format layer knows about is reachable from here
+// through three views over one document, and the difficulty swap is one
+// action in the header rather than the whole reason the page exists.
 
-async function render() {
-  let data;
+function workspaceBar(slot) {
+  const bar = el("div", "wsbar");
+  const back = pill("All saves", "i-chev", "quiet tiny back");
+  back.onclick = function () { history.back(); };
+  bar.append(back, el("div", "grow"));
+  if (slot.path.indexOf(".zip!") > -1) bar.append(chip("i-archive", "in zip", "hue archive"));
+  bar.append(chip(null, slot.slot, "mono"));
+  // A save with no Steam wrapper carries no account id, so the form is shown
+  // instead of an empty chip. The id itself arrives already masked.
+  if (slot.account) bar.append(chip("i-shield", slot.account, "mono"));
+  else if (slot.format) bar.append(chip(null, slot.format));
+  return bar;
+}
+
+function workspaceHead(slot, doc, session, reload) {
+  const h = doc.header || {};
+  const system = slot.slot === "system";
+  const box = el("header", "wshead");
+  const tone = system ? "var(--dim)" : diffMeta(h.difficulty).hue;
+  box.style.setProperty("--c", tone);
+
+  const title = el("div", "wstitle");
+  const sig = icon(system ? "i-slider" : diffMeta(h.difficulty).sig);
+  sig.setAttribute("class", "wssig");
+  const names = el("div", "grow");
+  names.append(el("h2", null, system ? "System file" : diffMeta(h.difficulty).name));
+  const where = [h.world_logo_name, h.location_name].filter(Boolean).join("  ·  ");
+  names.append(el("p", "sub", where || slot.displayPath));
+  title.append(sig, names);
+  box.append(title);
+
+  if (system) {
+    box.append(el("p", "hint",
+      "Shared configuration, not a playthrough. It carries no difficulty, no " +
+      "characters and no inventory, so the editor below shows only the header " +
+      "fields it does hold."));
+    return box;
+  }
+
+  const facts = el("div", "facts");
+  facts.append(
+    chip("i-level", "level " + h.level),
+    chip("i-clock", h.playtime),
+    chip("i-coin", h.munny + " munny"));
+  if (h.saves_count) facts.append(chip("i-stack", "saved " + h.saves_count + "×"));
+  if (h.saved_at) facts.append(chip("i-clock", "written " + h.saved_at, "mono"));
+  box.append(facts);
+
+  // A disclosure rather than a permanent panel: the swap is the one action
+  // here that rewrites the file on its own terms, and leaving it open would
+  // put it back in the position this redesign took it out of.
+  const toggle = pill("Change difficulty", "i-slider", "quiet");
+  const panel = el("div");
+  panel.hidden = true;
+  panel.append(difficultyPanel(slot, session, reload));
+  toggle.onclick = function () {
+    panel.hidden = !panel.hidden;
+    toggle.lastChild.textContent = panel.hidden ? "Change difficulty" : "Hide difficulty";
+  };
+  const acts = el("div", "controls");
+  acts.append(toggle);
+  box.append(acts, panel);
+  return box;
+}
+
+async function paintWorkspace(slot) {
+  const holder = el("div");
+  holder.append(el("div", "skel"), el("div", "skel"));
+  app.append(workspaceBar(slot), holder);
+
+  let doc;
   try {
-    data = await api("/api/scan");
+    await loadSchema();
+    doc = await api("/api/detail?path=" + encodeURIComponent(slot.path));
   } catch (e) {
-    app.innerHTML = "";
-    app.append(banner("hot", "i-alert", "Could not read saves", e.message));
+    holder.innerHTML = "";
+    holder.append(banner("hot", "i-alert", "Could not open this save", e.message));
     return;
   }
 
+  // The workbench owns the document; the head only needs to know whether it
+  // has unsaved work in it, which is what session carries between them.
+  const session = { dirty: function () { return false; } };
+  const bench = buildWorkbench(slot, doc, session);
+  const head = workspaceHead(slot, doc, session, function () {
+    // The swap wrote the file. Rebuild from disk rather than reasoning about
+    // what moved: it touches HP, MP and three ability words as well as the
+    // flag, and a card in the list behind us now reads the old difficulty.
+    SCAN = null;
+    app.innerHTML = "";
+    paintWorkspace(slot);
+  });
+
+  holder.innerHTML = "";
+  holder.append(head, bench);
+}
+
+/* --------------------------------------------------------------- layout -- */
+
+const wrapNode = document.querySelector(".wrap");
+
+// The last scan, kept so stepping back out of a save is instant. Anything
+// that writes a file drops it, because a card renders what is on disk.
+let SCAN = null;
+let VIEW = { name: "library", slot: null };
+
+function openWorkspace(slot) {
+  VIEW = { name: "workspace", slot: slot };
+  // Same URL, so the token in the query survives; the entry exists only to
+  // give the browser's Back button something to pop.
+  history.pushState({ kh3: "workspace" }, "");
+  paint();
+}
+
+addEventListener("popstate", function () {
+  if (VIEW.name !== "workspace") return;
+  VIEW = { name: "library", slot: null };
+  paint();
+});
+
+async function paint() {
   app.innerHTML = "";
+  scrollTo({ top: 0 });
+  // The list reads well narrow; a save's dashboard does not.
+  wrapNode.classList.toggle("wide", VIEW.name === "workspace");
+  if (VIEW.name === "workspace") return paintWorkspace(VIEW.slot);
+  return paintLibrary();
+}
+
+// render refetches and shows the list. folderPanel calls it once a folder is
+// added or forgotten, and both Rescan buttons go through it.
+async function render() {
+  SCAN = null;
+  VIEW = { name: "library", slot: null };
+  await paint();
+}
+
+async function paintLibrary() {
+  if (!SCAN) {
+    app.append(el("div", "skel"), el("div", "skel"));
+    try {
+      SCAN = await api("/api/scan");
+    } catch (e) {
+      app.innerHTML = "";
+      app.append(banner("hot", "i-alert", "Could not read saves", e.message));
+      return;
+    }
+    app.innerHTML = "";
+  }
+  const data = SCAN;
 
   if (data.gameRunning) {
     app.append(banner("hot", "i-play", "Kingdom Hearts III appears to be running",

@@ -90,7 +90,12 @@ body {
 @keyframes turn { to { transform:rotate(360deg); } }
 
 /* -------------------------------------------------------------- layout -- */
-.wrap { max-width:880px; margin:0 auto; position:relative; }
+.wrap { max-width:880px; margin:0 auto; position:relative;
+  transition:max-width .35s var(--out); }
+/* A list of saves reads well narrow. One save's dashboard does not: it is a
+   grid of tiles and a party of character sheets, and at 880px they stack into
+   a column that hides the shape of the thing. */
+.wrap.wide { max-width:1120px; }
 
 .masthead { display:flex; align-items:center; gap:1.25rem; padding:3rem 0 1.5rem; }
 .sigil { position:relative; width:74px; height:74px; flex:none; }
@@ -346,6 +351,15 @@ input[type=text]::placeholder { color:var(--faint); }
   transition:border-color .3s var(--ease), transform .3s var(--out);
 }
 .slot:hover { border-color:var(--hair-hi); transform:translateY(-2px); }
+/* A card opens a save rather than editing one in place, so it takes the
+   affordances of a control: a pointer, a focus ring, and a chevron that
+   leans in on hover. */
+.slot.nav { cursor:pointer; }
+.slot.nav:focus-visible { outline:2px solid var(--brass); outline-offset:3px; }
+.slot-go { width:15px; height:15px; flex:none; color:var(--faint);
+  transition:transform .25s var(--out), color .25s var(--ease); }
+.slot.nav:hover .slot-go, .slot.nav:focus-visible .slot-go {
+  transform:translateX(3px); color:var(--brass); }
 /* A hairline in the slot's own difficulty color along the top edge. */
 .slot::before {
   content:""; position:absolute; left:1.5rem; right:1.5rem; top:-1px; height:1px;
@@ -495,14 +509,49 @@ footer {
 footer code { font-family:var(--mono); color:var(--brass-lo); }
 footer .legal { margin-top:.4rem; opacity:.8; }
 
-/* ----------------------------------------------------------- workbench -- */
-/* The editor under a slot card: a summary to read, a form built from the
-   published schema, and the document itself. All three sit behind one toggle
-   and stay collapsed, so the page still opens on the one decision most people
-   came to make. */
+/* ------------------------------------------------------------ workspace -- */
+/* One save, opened. The bar names which file is being looked at, the head
+   carries who and where plus the one action that rewrites the file on its own
+   terms, and the workbench below is the rest. */
 
-.details { margin-top:.9rem; border-top:1px solid var(--glass-lo); padding-top:.75rem; }
-.dbody { margin-top:.75rem; }
+.wsbar { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;
+  margin:0 0 1.1rem; }
+.wsbar .grow { flex:1; }
+/* The chevron points back, so it is turned rather than given its own symbol. */
+.pill.back svg { transform:rotate(180deg); }
+
+.wshead {
+  position:relative; padding:1.5rem 1.6rem; margin-bottom:1.15rem;
+  border-radius:var(--card);
+  background:var(--glass); border:1px solid var(--hair);
+  -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
+  box-shadow:var(--lift), inset 0 1px 0 var(--sheen);
+  animation:rise .55s var(--out) both;
+}
+.wshead::before {
+  content:""; position:absolute; left:1.6rem; right:1.6rem; top:-1px; height:1px;
+  background:linear-gradient(90deg,transparent,var(--c,var(--brass)),transparent);
+  opacity:.75;
+}
+.wstitle { display:flex; align-items:center; gap:1rem; }
+.wstitle .grow { flex:1; min-width:0; }
+.wssig { width:34px; height:34px; flex:none; color:var(--c,var(--brass)); }
+.wshead h2 { margin:0; font:400 1.75rem/1.1 var(--serif); letter-spacing:.03em;
+  color:var(--c,var(--text)); }
+.wshead .sub { margin:.3rem 0 0; color:var(--dim); font-size:.86rem; }
+.wshead .facts { margin-top:1rem; }
+.wshead .controls { margin-top:1rem; }
+
+/* The swap panel, folded away until it is asked for. */
+.dpanel { margin-top:1rem; padding-top:1rem; border-top:1px solid var(--glass-lo);
+  animation:rise .3s var(--out) both; }
+
+/* ----------------------------------------------------------- workbench -- */
+/* Three views over one document: a dashboard to read, a form built from the
+   published schema, and the document itself. This is the body of a save's
+   workspace rather than a disclosure under a card, so nothing here is folded
+   away by default. */
+
 .work { display:flex; flex-direction:column; gap:.85rem; }
 
 .tabs { display:flex; gap:.35rem; flex-wrap:wrap; }
