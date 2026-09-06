@@ -17,6 +17,12 @@ BIN_DIR    := bin
 BIN        := $(BIN_DIR)/kh3save
 DIST       := dist
 GOSRC      := $(shell find cmd internal -name '*.go' 2>/dev/null)
+# The browser UI is embedded with //go:embed, so editing an asset changes the
+# binary without changing a single .go file. Leaving these out of the
+# prerequisites is why `make build` could answer "up to date" after the whole
+# interface had been rewritten, and then `make gui` served the old page from a
+# stale binary with nothing anywhere saying why.
+EMBEDS     := $(shell find internal/gui/assets -type f 2>/dev/null)
 
 # Version comes from the current tag when there is one, so a local build is
 # stamped the same way the release workflow stamps it.
@@ -40,7 +46,7 @@ help: ## list the targets
 
 
 
-$(BIN): $(GOSRC)
+$(BIN): $(GOSRC) $(EMBEDS)
 	@mkdir -p $(BIN_DIR)
 	@CGO_ENABLED=0 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/kh3save
 	@echo "built $(BIN) ($(VERSION))"
