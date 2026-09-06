@@ -121,13 +121,41 @@ export function heading(name, text) {
   return h;
 }
 
-export function banner(tone, name, title, text) {
+// A banner, and every one of them can be put away.
+//
+// Dismissable is the default rather than something each call opts into: these
+// say the same thing on every repaint, and a notice you have read, understood
+// and cannot silence stops being a notice and becomes furniture. Opting out is
+// for the ones where dismissing would leave the reader with nothing -- pass
+// { permanent: true } and say why at the call site.
+//
+// The dismissal is remembered under the title, which is what makes it stick
+// across a repaint, and it is forgotten when the page closes. That is
+// deliberate: these describe live conditions -- the game is running, Steam
+// Cloud is on -- and a dismissal that outlived the run would silence a warning
+// that is still true on the next one, for a reader who has since forgotten it.
+const DISMISSED = new Set();
+
+export function banner(tone, name, title, text, opts) {
+  const permanent = !!(opts && opts.permanent);
+  // An already-dismissed banner answers with an empty fragment rather than
+  // null: appending null puts the literal string "null" on the page, and the
+  // caller should not have to remember that.
+  if (!permanent && DISMISSED.has(title)) return document.createDocumentFragment();
+
   const n = el("div", "banner " + tone);
   const badge = el("div", "ico");
   badge.append(icon(name));
   const copy = el("div");
   copy.append(el("b", null, title), el("p", null, text));
   n.append(badge, copy);
+  if (!permanent) {
+    const close = pill(null, "i-x", "quiet round tiny");
+    close.title = "dismiss";
+    close.setAttribute("aria-label", "Dismiss this notice");
+    close.onclick = function () { DISMISSED.add(title); n.remove(); };
+    n.append(close);
+  }
   return n;
 }
 

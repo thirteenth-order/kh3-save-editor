@@ -15,6 +15,7 @@ import { codeEditor, parseError } from "./editor.js";
 import { SCHEMA, indexLines, loadSchema, validate } from "./schema.js";
 import { buildForm } from "./forms.js";
 import { overview } from "./overview.js";
+import { legalPage } from "./legal.js";
 
 const app = document.getElementById("app");
 const topbar = document.getElementById("topbar");
@@ -71,28 +72,36 @@ function segment(currentIndex, onPick) {
 }
 
 
+// Said in two places -- once over a list where every folder has Cloud on, and
+// once in the header of a save whose folder does -- so it is written once.
+const CLOUD_WARNING =
+  "Turn Cloud off for the game in its Steam properties before applying, then " +
+  "back on once the change has loaded. Otherwise Steam can restore its own " +
+  "copy over the edit.";
+
 /* ------------------------------------------------------------ platforms -- */
-// Which mark stands for a folder or a container. The value is a directory
-// name off the disk, so it is matched loosely and falls back rather than
-// leaving a row with a hole in it.
+// Which mark stands for a folder or a container. The value is a directory name
+// off the disk, so it is matched loosely and falls back rather than leaving a
+// row with a hole in it.
 //
-// These are ordinary objects -- a steam valve handwheel, a shopfront, a
-// controller -- chosen to denote a platform. No company's logo is reproduced
-// here, which is what lets the footer go on saying every mark on the page is
-// original artwork. Keep it that way.
+// The three brand marks are the only artwork in this program that is not
+// original: they are Simple Icons' CC0 files, and they identify a platform
+// rather than claim anything about it. See the sprite in index.html and the
+// Legal page.
 function platformIcon(name) {
   const at = String(name || "").toLowerCase();
-  if (at.indexOf("steam") > -1) return "i-valve";
-  if (at.indexOf("epic") > -1) return "i-store";
+  if (at.indexOf("steam") > -1) return "i-steam";
+  if (at.indexOf("epic") > -1) return "i-epic";
   if (at.indexOf("zip") > -1) return "i-archive";
   if (at.indexOf("added") > -1) return "i-folder";
   return "i-stack";
 }
 
 // A container form, which is a different question from the platform: a save
-// with no Steam wrapper is what a console writes.
+// with no Steam wrapper is what a console writes, and this build has never
+// been round-tripped through one, so the mark is as far as the claim goes.
 function formatIcon(format) {
-  return format === "steam" ? "i-valve" : "i-gamepad";
+  return format === "steam" ? "i-steam" : "i-playstation";
 }
 
 /* ---------------------------------------------------------------- slots -- */
@@ -739,11 +748,18 @@ function folderPanel(canBrowse, dirs) {
 // through three views over one document, and the difficulty swap is one
 // action in the header rather than the whole reason the page exists.
 
-function workspaceBar(slot) {
+// The bar with the way out of a full-page view. Back rather than a link to the
+// list, so it lands where the reader came from.
+function backBar(label) {
   const bar = el("div", "wsbar");
-  const back = pill("All saves", "i-chev", "quiet tiny back");
+  const back = pill(label, "i-chev", "quiet tiny back");
   back.onclick = function () { history.back(); };
   bar.append(back, el("div", "grow"));
+  return bar;
+}
+
+function workspaceBar(slot) {
+  const bar = backBar("All saves");
   if (slot.path.indexOf(".zip!") > -1) bar.append(chip("i-archive", "in zip", "hue archive"));
   bar.append(chip(null, slot.slot, "mono"));
   // A save with no Steam wrapper carries no account id, so the form is shown
@@ -787,6 +803,15 @@ function workspaceHead(slot, doc, session, reload) {
   if (h.saved_at) facts.append(chip("i-clock", "written " + h.saved_at, "mono"));
   box.append(facts);
 
+  // The warning belongs where the writing happens, and it is only true of a
+  // save whose own folder has Cloud on. Dismissable like any other, and the
+  // title names the slot so putting it away for one save does not put it away
+  // for the next.
+  if (slot.cloud) {
+    box.append(banner("warm", "i-cloud",
+      "Steam Cloud is on for " + slot.slot, CLOUD_WARNING));
+  }
+
   // A disclosure rather than a permanent panel: the swap is the one action
   // here that rewrites the file on its own terms, and leaving it open would
   // put it back in the position this redesign took it out of.
@@ -815,7 +840,8 @@ async function paintWorkspace(slot, at) {
     doc = await api("/api/detail?path=" + encodeURIComponent(slot.path));
   } catch (e) {
     holder.innerHTML = "";
-    holder.append(banner("hot", "i-alert", "Could not open this save", e.message));
+    holder.append(banner("hot", "i-alert", "Could not open this save", e.message,
+      { permanent: true }));
     return;
   }
 
@@ -851,7 +877,8 @@ async function paintWorkspace(slot, at) {
 //   #slot=2&tab=edit                opened on Fields
 //   #slot=2&tab=edit&open=header    with a section already unfolded
 //   #slot=2&tab=edit&shut=header    or with the one it opens by default shut
-//   #slot=2&reveal=party,story      and the spoiler covers already lifted
+//   #slot=2&reveal=party,story_flags   and the spoiler covers already lifted
+//   #legal                          the notices page
 //
 // The index is into the list as it is drawn, which is the only stable name a
 // slot has here: a path would put a save folder in the address bar, and on
@@ -896,6 +923,18 @@ async function route() {
   scrollTo({ top: 0 });
 
   const at = readRoute();
+
+  // The notices page needs no scan behind it, so it is answered before one is
+  // fetched: it has to be readable even when nothing on this machine can be
+  // read at all.
+  if (at.legal !== undefined) {
+    // Prose, so it keeps the narrow measure the list uses rather than the
+    // dashboard's width, which would leave it as a column against dead space.
+    wrapNode.classList.remove("wide");
+    app.append(backBar("All saves"), legalPage());
+    return;
+  }
+
   const index = Number(at.slot);
   const wanted = at.slot !== undefined && Number.isInteger(index) && index >= 0;
   // The list reads well narrow. One save's dashboard does not.
@@ -907,7 +946,8 @@ async function route() {
       SCAN = await api("/api/scan");
     } catch (e) {
       app.innerHTML = "";
-      app.append(banner("hot", "i-alert", "Could not read saves", e.message));
+      app.append(banner("hot", "i-alert", "Could not read saves", e.message,
+        { permanent: true }));
       return;
     }
     app.innerHTML = "";
@@ -946,9 +986,13 @@ function paintLibrary() {
     app.append(banner("zip", "i-archive", "One of these is a backup archive",
       "Saves inside a .zip can be read and edited here, and the whole archive is backed up before it is rewritten. The game cannot read a zip, so unpack it back into your save folder before playing."));
   }
-  if (data.dirs && data.dirs.some(function (d) { return d.cloud; })) {
-    app.append(banner("warm", "i-cloud", "Steam Cloud is on for this save",
-      "Turn Cloud off for the game in its Steam properties before applying, then back on once the change has loaded. Otherwise Steam can restore its own copy over the edit."));
+  // Steam Cloud is a property of one folder, not of the machine. When every
+  // folder has it the warning is about all of them and belongs at the top;
+  // when only some do, saying "this save" above a list containing saves it is
+  // not true of is worse than not saying it, so it moves onto the cards.
+  const clouded = (data.dirs || []).filter(function (d) { return d.cloud; });
+  if (clouded.length && clouded.length === (data.dirs || []).length) {
+    app.append(banner("warm", "i-cloud", "Steam Cloud is on for these saves", CLOUD_WARNING));
   }
 
   if (!data.dirs || !data.dirs.length) {

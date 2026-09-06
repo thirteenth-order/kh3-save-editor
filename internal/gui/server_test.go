@@ -310,7 +310,7 @@ func TestUIReadsOnlyKeysWeSend(t *testing.T) {
 	var page []byte
 	for _, name := range []string{"assets/index.html", "assets/diffs.js", "assets/ui.js",
 		"assets/editor.js", "assets/schema.js", "assets/forms.js", "assets/overview.js",
-		"assets/app.js"} {
+		"assets/legal.js", "assets/app.js"} {
 		blob, err := assets.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)
@@ -485,6 +485,116 @@ func TestEveryImportedModuleIsOnTheAllowList(t *testing.T) {
 	for _, m := range refs {
 		if _, ok := staticFiles[m[1]]; !ok {
 			t.Errorf("index.html asks for %q, which staticFiles does not serve", m[1])
+		}
+	}
+}
+
+// A line break inside SVG path data has to fall on whitespace that was already
+// there. It is tempting to wrap a long "d" attribute to keep the sprite
+// readable, and Python's textwrap will happily break on a hyphen -- which in
+// path data is a minus sign, so "-.26-1.29" becomes "-.26-" and "1.29" and the
+// number is destroyed. The browser reports it to a console nobody is watching,
+// draws nothing for that symbol, and everything else still looks fine.
+//
+// The characters below can only ever appear mid-token, so a line ending in one
+// is a break that landed inside a number.
+func TestSpritePathDataIsNotBrokenAcrossLines(t *testing.T) {
+	page, err := assets.ReadFile("assets/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := regexp.MustCompile(`(?s)\sd="([^"]*)"`).FindAllStringSubmatch(string(page), -1)
+	if len(paths) < 20 {
+		t.Fatalf("found %d path attributes; the scan is not reading the sprite", len(paths))
+	}
+	wrapped := 0
+	for _, m := range paths {
+		if !strings.Contains(m[1], "\n") {
+			continue
+		}
+		wrapped++
+		for i, line := range strings.Split(m[1], "\n") {
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" {
+				continue
+			}
+			if strings.ContainsRune("-+.,", rune(trimmed[len(trimmed)-1])) {
+				t.Errorf("path data line %d ends on %q, so the break landed inside a "+
+					"number: ...%s", i+1, trimmed[len(trimmed)-1:], tail(trimmed, 24))
+			}
+		}
+	}
+	if wrapped == 0 {
+		t.Skip("no path data is wrapped, so there is nothing to get wrong")
+	}
+}
+
+func tail(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[len(s)-n:]
+}
+
+// The interface's Legal page and NOTICE.md say the same things to two
+// audiences: one to somebody using the program, one to somebody -- a rights
+// holder, a crawler, a lawyer -- who went looking for the file that is
+// conventionally named. Two copies of a statement like this are worth having
+// only if they cannot drift, and the way they drift is that one gets updated.
+//
+// So every claim that carries legal weight has to be in both. This does not
+// check that they are worded identically, because they are deliberately not.
+func TestTheLegalPageAndTheNoticeAgree(t *testing.T) {
+	page, err := assets.ReadFile("assets/legal.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	notice, err := os.ReadFile(filepath.Join("..", "..", "NOTICE.md"))
+	if err != nil {
+		t.Fatalf("NOTICE.md is what a rights holder will look for first: %v", err)
+	}
+
+	// The page's prose is written as JavaScript string literals joined across
+	// lines, so rejoin them before looking for a phrase that spans a break.
+	joined := regexp.MustCompile(`"\s*\+\s*\n?\s*"`).ReplaceAll(page, nil)
+	flat := func(b []byte) string {
+		return strings.Join(strings.Fields(string(b)), " ")
+	}
+	inPage, inNotice := flat(joined), flat(notice)
+
+	for _, claim := range []string{
+		// Who owns what. Naming an owner wrongly, or dropping one, is the
+		// failure this is really guarding against.
+		"Square Enix Holdings Co., Ltd.",
+		"The Walt Disney Company",
+		"Valve Corporation",
+		"Epic Games, Inc.",
+		"Sony Interactive Entertainment Inc.",
+
+		// The claims themselves.
+		"not affiliated with",
+		"Simple Icons",
+		"CC0 1.0",
+		"GPL-3.0",
+		"127.0.0.1",
+		"no telemetry",
+	} {
+		if !strings.Contains(inPage, claim) {
+			t.Errorf("the Legal page does not say %q, and NOTICE.md does", claim)
+		}
+		if !strings.Contains(inNotice, claim) {
+			t.Errorf("NOTICE.md does not say %q, and the Legal page does", claim)
+		}
+	}
+
+	// The load-bearing sentence, the one a rights holder is actually looking
+	// for. Both must carry it and it must not be softened into a maybe.
+	for name, text := range map[string]string{"the Legal page": inPage, "NOTICE.md": inNotice} {
+		if !strings.Contains(text, "KINGDOM HEARTS") {
+			t.Errorf("%s never names the game it is about", name)
+		}
+		if !strings.Contains(text, "is bundled with this program") {
+			t.Errorf("%s does not state plainly that no game assets are included", name)
 		}
 	}
 }

@@ -294,6 +294,7 @@ h2 svg { width:14px; height:14px; color:var(--brass-lo); }
 .banner .ico svg { width:16px; height:16px; }
 .banner b { display:block; font-weight:650; font-size:.92rem; margin-bottom:.2rem; }
 .banner p { margin:0; color:var(--dim); font-size:.86rem; }
+.banner > .pill { margin-left:auto; flex:none; align-self:flex-start; }
 .banner.hot { --tone:var(--critical); }
 .banner.warm { --tone:var(--brass); }
 .banner.cool { --tone:var(--standard); }
@@ -508,6 +509,18 @@ footer {
 }
 footer code { font-family:var(--mono); color:var(--brass-lo); }
 footer .legal { margin-top:.4rem; opacity:.8; }
+footer .legal a { color:var(--brass-lo); text-decoration:none;
+  border-bottom:1px solid rgba(223,186,115,.3); white-space:nowrap; }
+footer .legal a:hover { color:var(--brass); border-bottom-color:var(--brass); }
+
+/* ----- the notices page ----- */
+/* Long-form prose, so it gets a reading measure rather than the full width of
+   a dashboard. The one line of small print this replaced could not say what a
+   rights holder actually wants to know. */
+.legalpage { display:flex; flex-direction:column; gap:1rem; max-width:76ch; }
+.legalpage .lead { margin:-.4rem 0 .2rem; color:var(--dim); font-size:.9rem; }
+.legal-p { margin:0 0 .7rem; color:var(--text); font-size:.88rem; line-height:1.65; }
+.legal-p:last-child { margin-bottom:0; }
 
 /* ------------------------------------------------------------ workspace -- */
 /* One save, opened. The bar names which file is being looked at, the head
@@ -541,6 +554,7 @@ footer .legal { margin-top:.4rem; opacity:.8; }
 .wshead .sub { margin:.3rem 0 0; color:var(--dim); font-size:.86rem; }
 .wshead .facts { margin-top:1rem; }
 .wshead .controls { margin-top:1rem; }
+.wshead .banner { margin:1rem 0 0; }
 
 /* The swap panel, folded away until it is asked for. */
 .dpanel { margin-top:1rem; padding-top:1rem; border-top:1px solid var(--glass-lo);

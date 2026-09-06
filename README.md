@@ -752,6 +752,36 @@ The ability and item tables are generated from the upstream enums by
 `tools/gen_tables.py`, and CI fails if a committed table no longer matches its
 source.
 
+## What is and is not in this program
+
+**No artwork, image, texture, model, audio, music, video, font or dialogue from
+KINGDOM HEARTS -- or from any other Square Enix or Disney property -- is
+bundled with this program, distributed with it, or displayed by it.** Every
+mark and ornament in the interface is original geometry drawn for this project,
+with exactly three exceptions: the Steam, Epic Games and PlayStation icons that
+say which platform a save folder came from, which are [Simple Icons][si] files
+under [CC0 1.0][cc0].
+
+The program does show short names -- "Potion", "Kingdom Key", "Olympus". Those
+are labels for numbers in your own save file, generated at build time from
+public enum lists, and used to say which value is which. Without them an editor
+could only offer you the number, and you would have no way to tell a keyblade
+from a snack. No dialogue, script or story text from the game is here.
+
+KINGDOM HEARTS is a trademark of Square Enix Holdings Co., Ltd.; Disney
+characters and properties are trademarks of The Walt Disney Company; Steam and
+Valve of Valve Corporation; Epic Games of Epic Games, Inc.; PlayStation of Sony
+Interactive Entertainment Inc. **This program is not affiliated with, endorsed
+by, or connected to any of them.** It is an unofficial, fan-made tool.
+
+The full statement is [NOTICE.md](NOTICE.md), and the interface carries it as a
+Legal page rather than a line of small print. If you represent a rights holder
+and would prefer a mark or a name be removed, please open an issue; nothing in
+this project needs anybody's intellectual property to work.
+
+[si]: https://simpleicons.org
+[cc0]: https://creativecommons.org/publicdomain/zero/1.0/
+
 ## Credits
 
 This stands on two existing projects and would not exist without them.

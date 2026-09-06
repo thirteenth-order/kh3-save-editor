@@ -73,7 +73,7 @@ const SCAN = {
   gameRunning: false,
   dirs: [{
     path: "/saves", displayPath: "/saves", platform: "steam",
-    accountId: "765611*******0000", cloud: false, archive: false,
+    accountId: "765611*******0000", cloud: true, archive: false,
     slots: [
       {
         file: "KHIII_slot0.bin", path: "/saves/KHIII_slot0.bin",
@@ -81,14 +81,14 @@ const SCAN = {
         difficulty: 3, difficultyName: "Critical", level: 7,
         playtime: "1:38:16", munny: 583, location: "Mount Olympus",
         account: "765611*******0000", format: "steam", world: "Olympus",
-        canGrantStartItem: true, canRevokeStartItem: false,
+        cloud: true, canGrantStartItem: true, canRevokeStartItem: false,
       },
       {
         file: "KHIII_system.bin", path: "/saves/KHIII_system.bin",
         displayPath: "/saves/KHIII_system.bin", slot: "system",
         difficulty: 0, difficultyName: "", level: 0, playtime: "", munny: 0,
         location: "", account: "", format: "steam", world: "",
-        canGrantStartItem: false, canRevokeStartItem: false,
+        cloud: true, canGrantStartItem: false, canRevokeStartItem: false,
       },
       {
         file: "bad.bin", path: "/saves/bad.bin", displayPath: "/saves/bad.bin",
@@ -126,7 +126,7 @@ function ok(name, cond, extra) {
 
 (async function () {
   mods = await Promise.all(["diffs.js", "ui.js", "editor.js", "schema.js",
-                            "forms.js", "overview.js"].map(load));
+                            "forms.js", "overview.js", "legal.js"].map(load));
   await get("loadSchema")();
   const loadedSchema = get("SCHEMA");
   const validate = get("validate");
@@ -432,6 +432,37 @@ function ok(name, cond, extra) {
   ok("opening a save puts it in the fragment, so a reload finds it again",
     loc.hash === "#slot=0", "hash is " + JSON.stringify(loc.hash));
 
+  /* --------------------------------------------------------------- notices */
+  // Steam Cloud is a property of one folder, so the warning has to reach the
+  // save it is true of rather than only the top of the list.
+  ok("a save whose folder has Cloud on says so in its own header",
+    reads().indexOf("Steam Cloud is on for slot0") > -1);
+
+  // And every notice can be put away. Dismissing is remembered by title, so a
+  // repaint does not bring it straight back.
+  const dismiss = painted().filter(function (n) {
+    return n.getAttribute("aria-label") === "Dismiss this notice";
+  });
+  ok("the notice offers a way to put it away", dismiss.length === 1,
+    "found " + dismiss.length);
+  dismiss[0].onclick();
+  loc.hash = "";
+  await settle();
+  await settle();
+  loc.hash = "slot=0";
+  await settle();
+  await settle();
+  ok("and it stays away across a repaint",
+    reads().indexOf("Steam Cloud is on for slot0") < 0);
+
+  // An error banner is the whole content of a failed view, so it must not be
+  // dismissable: putting it away would leave a blank page and no reason.
+  ok("an error notice has no dismiss button",
+    !get("banner")("hot", "i-alert", "Could not read saves", "why",
+      { permanent: true }).walk().next().value.children.some(function (c) {
+        return c.getAttribute && c.getAttribute("aria-label") === "Dismiss this notice";
+      }));
+
   // The system file has no difficulty and no characters. It still opens, and
   // it has to say what it is rather than drawing an empty playthrough.
   cards[1].onclick();
@@ -439,6 +470,25 @@ function ok(name, cond, extra) {
   await settle();
   ok("the system file opens and says what it is",
     reads().indexOf("System file") > -1);
+
+  /* ---------------------------------------------------------------- the legal page */
+  // It is reachable without a scan on purpose -- it has to be readable when
+  // nothing on this machine can be read at all -- so it is worth checking that
+  // it builds and that the sentence a rights holder came for is in it.
+  const notices = get("legalPage")();
+  const said = notices.textContent;
+  ok("the legal page builds", !!notices);
+  for (const claim of ["KINGDOM HEARTS", "Simple Icons", "CC0 1.0",
+                       "not affiliated with", "GPL-3.0"]) {
+    ok("it states " + JSON.stringify(claim), said.indexOf(claim) > -1);
+  }
+
+  loc.hash = "legal";
+  await settle();
+  await settle();
+  ok("and the fragment reaches it", reads().indexOf("Legal and attribution") > -1);
+  ok("without needing a save to be readable first",
+    reads().indexOf("KINGDOM HEARTS") > -1);
 
   /* ---------------------------------------------------------------- the route */
   // The fragment is what makes a save linkable and a reload survivable, so

@@ -180,9 +180,14 @@ type slotInfo struct {
 	World  string `json:"world"`
 	// Whether the Critical start items would do anything for this save, so the
 	// interface can show those switches only when they would.
-	CanGrant  bool   `json:"canGrantStartItem"`
-	CanRevoke bool   `json:"canRevokeStartItem"`
-	Error     string `json:"error,omitempty"`
+	CanGrant  bool `json:"canGrantStartItem"`
+	CanRevoke bool `json:"canRevokeStartItem"`
+	// Cloud is the folder's steam_autocloud.vdf, carried down to the slot so
+	// the warning can sit on the save it applies to rather than only at the
+	// top of the page. A save in a non-Steam folder is not at risk of Steam
+	// restoring its own copy over an edit, and should not be told it is.
+	Cloud bool   `json:"cloud"`
+	Error string `json:"error,omitempty"`
 }
 
 type scanResult struct {
@@ -208,7 +213,8 @@ func scan(dirs []kh3.SaveDir) scanResult {
 		di.AccountID = kh3.MaskAccount(d.AccountID)
 		for _, p := range kh3.ListSaves(d.Path) {
 			base := kh3.Base(p)
-			si := slotInfo{File: base, Path: p, DisplayPath: kh3.MaskPath(p), Slot: strings.TrimSuffix(strings.TrimPrefix(base, "KHIII_"), ".bin")}
+			si := slotInfo{File: base, Path: p, DisplayPath: kh3.MaskPath(p), Cloud: d.Cloud,
+				Slot: strings.TrimSuffix(strings.TrimPrefix(base, "KHIII_"), ".bin")}
 			blob, err := kh3.ReadFile(p)
 			if err != nil {
 				si.Error = err.Error()
@@ -698,6 +704,7 @@ var staticFiles = map[string]string{
 	"schema.js":   "schema.js",
 	"forms.js":    "forms.js",
 	"overview.js": "overview.js",
+	"legal.js":    "legal.js",
 	"app.js":      "app.js",
 	"icon.svg":    "icon.svg",
 	"emblem.svg":  "emblem.svg",
