@@ -248,7 +248,10 @@ kh3save schema                       # every editable field, and its range
 
 `schema` prints the same field description the interface builds its editor out
 of, so "what can this actually edit?" has an answer that does not involve
-opening a browser. `-json` gives the whole thing, enum tables included.
+opening a browser. `-json` gives the whole thing, enum tables included, and
+`-tables` just the tables:
+
+<img src="docs/demo-schema.gif" alt="kh3save schema -tables listing every enum table the save format uses and how many ids each holds, from Abilities at 512 down to AiAbilityUse at 3" width="720">
 
 The account id is detected from the save path. Override it with `-account` or
 `$KH3_ACCOUNT`. In-place edits are always backed up first.
@@ -273,6 +276,12 @@ the file you started with. Note that a console's own savedata container is a
 separate layer this tool does not open or re-sign; `convert` deals with the
 file *inside* it.
 
+<img src="docs/demo-convert.gif" alt="kh3save convert stripping the Steam wrapper off a save, info reporting the result as a plain container with no account id, convert putting the wrapper back on, and cmp finding the result identical to the original byte for byte" width="720">
+
+Going back to `pc` is the one direction that needs `-account`: a plain save
+carries no id, and the key is derived from the id alone, so there is nothing
+to detect and nothing worth guessing.
+
 ### What it looks like
 
 Nothing below is mocked up: the binary is real and the output is whatever it
@@ -284,6 +293,11 @@ a README. `tools/demo/README.md` covers how the recordings are made.
 `info` reads a folder without touching it:
 
 <img src="docs/demo-info.gif" alt="kh3save info printing the header fields of three save slots: version, difficulty, level, playtime, munny and map" width="720">
+
+`info -l` adds everything else the format layer knows, down to the record
+block at the tail of the file:
+
+<img src="docs/demo-long.gif" alt="kh3save info -l on one save, listing party, magic, links, shortcuts, synthesis materials, story progress, attraction and shotlock records with their best scores, minigame and Flantastic Seven records, the photo album limit, keychain upgrades, and each character's stats and equipment" width="720">
 
 `swap` reports exactly the same thing with `-n` as without it. The only
 difference is whether the last two lines happen:
@@ -364,7 +378,7 @@ says which one an id belongs to, so an id on its own is meaningless.
 A whole dump can be fed straight back to `patch` unchanged; it reports no
 changes and writes nothing.
 
-<img src="docs/demo-json.gif" alt="kh3save dump writing a save to JSON, then patch applying a three-key document and reporting each field it changed" width="720">
+<img src="docs/demo-json.gif" alt="kh3save dump writing a save to JSON, then patch applying a document that touches the header, a character and the record block at the tail, reporting each field it changed by name" width="720">
 
 Integers accept decimal or `0x` hex. The size, version and checksum fields are
 read-only and moving one is an error, though a document that carries them
