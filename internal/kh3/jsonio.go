@@ -600,6 +600,44 @@ func reconcileMunny(p []byte, before [3]int64, changes *[]string) error {
 	return nil
 }
 
+// slotOnlySections are the parts of a document that only exist for a
+// per-playthrough slot. Dump omits the first seven for the small system file
+// and emits the last three empty, so an empty one has to stay acceptable or a
+// system file could not be dumped and patched back.
+var slotOnlySections = []string{
+	"party", "shortcuts", "magic", "links", "story_flags", "keychain_upgrades",
+	"records", "characters", "inventory", "materials",
+}
+
+// refuseSlotOnlyKeys draws the line Dump already draws: for the system file it
+// stops at the difficulty byte. Patch did not, and a document naming a
+// slot-only field did not fail, it *panicked* -- bonus_hp lives at 0xB49C and
+// the system file is about 0x7B20 bytes, so writing it indexed past the buffer.
+// An error naming the field is the whole fix; the document simply does not
+// belong to this file.
+func refuseSlotOnlyKeys(d map[string]any, byName map[string]headerField) error {
+	if hdr, ok := d["header"].(map[string]any); ok {
+		for _, key := range sortedKeys(hdr) {
+			f, known := byName[key]
+			_, isText := StringFieldByName(key)
+			if (known && f.off > 0x14) || isText {
+				return fmt.Errorf("header.%s is not in a system file", key)
+			}
+		}
+	}
+	for _, sec := range slotOnlySections {
+		v, ok := d[sec]
+		if !ok {
+			continue
+		}
+		if m, isMap := v.(map[string]any); isMap && len(m) == 0 {
+			continue
+		}
+		return fmt.Errorf("%s is not in a system file", sec)
+	}
+	return nil
+}
+
 // Patch applies a partial JSON document. Keys that are absent are left alone.
 func Patch(plain, doc []byte) ([]byte, []string, error) {
 	var d map[string]any
@@ -620,6 +658,8 @@ func Patch(plain, doc []byte) ([]byte, []string, error) {
 	var ledgerBefore [3]int64
 	if IsSlot(out) {
 		ledgerBefore = readMunnyLedger(out)
+	} else if err := refuseSlotOnlyKeys(d, byName); err != nil {
+		return nil, nil, err
 	}
 
 	if hdr, ok := d["header"].(map[string]any); ok {
