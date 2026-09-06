@@ -298,7 +298,7 @@ of, so "what can this actually edit?" has an answer that does not involve
 opening a browser. `-json` gives the whole thing, enum tables included, and
 `-tables` just the tables:
 
-<img src="docs/demo-schema.gif" alt="kh3save schema -tables listing every enum table the save format uses and how many ids each holds, from Abilities at 512 down to AiAbilityUse at 3" width="720">
+<img src="docs/demo-schema.gif" alt="kh3save schema -tables listing every enum table the save format uses and how many ids each holds, in alphabetical order from Abilities at 512 to Worlds at 22" width="720">
 
 The account id is detected from the save path, and an Epic Games Store save
 needs no id of its own (see [Key derivation](#key-derivation)). Override it
