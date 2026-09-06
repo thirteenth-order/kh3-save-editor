@@ -4,13 +4,13 @@
 
 # KH3 Save Editor
 
-**Read and edit a Kingdom Hearts III save, offline.** Change the difficulty
-mid-playthrough, or edit anything else the format holds: equipment, party,
-abilities, inventory, synthesis materials, magic, shortcuts, story progress,
-minigame records and the level a save reloads into. Every field is named,
-ranged and pickable from the real game tables, in the browser or from the
-command line. Reversible and checksummed. No running game, no memory hooks, no
-real-time capture.
+**Read and edit a Kingdom Hearts III save, offline.** Everything the format
+holds: stats, equipment, party, abilities, inventory, synthesis materials,
+magic, shortcuts, story progress, minigame records, and the difficulty --
+changed mid-playthrough, with the side effects it actually has. Every field is
+named, ranged and pickable from the real game tables, in the browser or from
+the command line. Reversible and checksummed. No running game, no memory hooks,
+no real-time capture.
 
 [![ci](https://github.com/thirteenth-order/kh3-save-editor/actions/workflows/ci.yml/badge.svg)](https://github.com/thirteenth-order/kh3-save-editor/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/thirteenth-order/kh3-save-editor?color=dfba73)](https://github.com/thirteenth-order/kh3-save-editor/releases/latest)
@@ -19,7 +19,7 @@ real-time capture.
 [![go version](https://img.shields.io/github/go-mod/go-version/thirteenth-order/kh3-save-editor)](go.mod)
 [![license](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
-<img src="docs/screenshot-saves.png" alt="The kh3save interface listing save slots, each with a difficulty picker and a button that opens the editor" width="720">
+<img src="docs/screenshot-saves.png" alt="The kh3save interface listing save slots, each showing its difficulty, level, playtime, munny and location" width="720">
 
 </div>
 
@@ -201,14 +201,29 @@ alone, because removing it would desync the save from the gear still equipped.
 
 ## The interface
 
-Running the binary with no arguments opens it. It finds your saves, and each
-one gets a difficulty picker and an editor behind **Open editor**. The editor
-is three views over one document, and all three write through exactly the same
-checks the `patch` subcommand uses, so neither can accept something the other
-would refuse.
+Running the binary with no arguments opens it. It finds your saves and lists
+them; picking one opens its workspace. The workspace leads with what the save
+*is* -- difficulty, level, playtime, where it left off -- and changing the
+difficulty is one action in its header rather than the front page.
 
-**Summary** is what the save says, in a sentence per region: world, party,
-magic, materials, story progress, and what each character is wearing.
+The editor is three views over one document, and all three write through
+exactly the same checks the `patch` subcommand uses, so neither can accept
+something the other would refuse.
+
+**Summary** is a dashboard of what the save holds: where it left off, its
+numbers, a sheet per character with vitals, equipment by kind and ability
+counts, the magic and links it has learned, how much of the inventory and how
+many materials it carries, which records have been set, and how far each world
+has got.
+
+It has no completion percentages, and that is deliberate. The only two meters
+are level and lucky emblems, because those are the only fields the format
+carries a real limit for -- 99 and 90 -- and both are read from the published
+schema rather than written into the page. Story progress counts how far a world
+got and nothing in the file says how far it goes, so it is printed and not
+drawn as a bar. Where a number's offset is upstream's word rather than
+something this project confirmed against the game, the panel says so where the
+number is read.
 
 **Fields** is a form, and it is not hand-written. The program publishes a
 description of every field it can edit -- what each one is called, which table
@@ -637,12 +652,20 @@ make docker-smoke  # build the image and drive it end to end
 in the tree is `tools/gen_tables.py`, and it is stdlib only. `make docker-smoke`
 is the one target that needs Docker, which is why it is not part of `ci`.
 
-It will also run the browser half if `node` is on the path, and skip it with a
-message if not. `tools/jscheck` runs the page's own validator, JSON editor and
-form builder outside a browser -- against the same schema the server serves and
-a dump of the same fixture the Go tests use -- because otherwise that is a
-thousand lines nothing checks. Its `dom.js` is the smallest DOM those builders
-actually touch; it is not a browser and does not try to be one.
+It will also check the browser half if `node` is on the path, and skip it with
+a message if not, because otherwise that is a couple of thousand lines nothing
+checks. `tools/jscheck` runs the page's own validator, JSON editor, form
+builder, dashboard and shell outside a browser, against the same schema the
+server serves and a dump of the same fixture the Go tests use. Its `dom.js` is
+the smallest DOM those builders actually touch; it is not a browser and does
+not try to be one. `make typecheck` reads the same files with TypeScript's
+`checkJs` and catches the branches a run never reaches.
+
+Neither one changes what ships. The page is plain ES modules the browser loads
+as written, the binary embeds those exact bytes, and there is no bundler and no
+build step anywhere in the release path -- `go build` on a clean checkout is
+still the whole story. TypeScript is a dev-only dependency, pinned, and emits
+nothing.
 
 ### Building without installing a toolchain
 
