@@ -199,13 +199,18 @@ function combo(opts) {
   let rows = [];
 
   function labelFor(id) {
+    // A null value means nothing is chosen yet, which is what the "add one of
+    // these" pickers start as: the box shows its placeholder rather than the
+    // number -1 in the colour reserved for an id no table covers.
+    if (id === null || id === undefined) return "";
     for (const e of entries) if (e.id === id) return e.name + "  ·  " + id;
     return String(id);
   }
 
   function show() {
     input.value = labelFor(value);
-    input.classList.toggle("unknown", !entries.some(function (e) { return e.id === value; }));
+    input.classList.toggle("unknown",
+      value !== null && value !== undefined && !entries.some(function (e) { return e.id === value; }));
   }
 
   function close() { list.hidden = true; cursor = -1; }
@@ -236,6 +241,9 @@ function combo(opts) {
     show();
     close();
     if (opts.onPick) opts.onPick(id);
+    // A picker that adds something keeps nothing selected, so the next one can
+    // be typed straight away.
+    if (opts.clearAfterPick) { value = null; show(); }
   }
 
   function move(step) {

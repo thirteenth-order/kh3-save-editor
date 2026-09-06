@@ -318,7 +318,11 @@ h2 svg { width:14px; height:14px; color:var(--brass-lo); }
 .field { position:relative; flex:1; min-width:16rem; display:flex; align-items:center; }
 .field svg { position:absolute; left:.95rem; width:15px; height:15px; color:var(--faint);
              pointer-events:none; }
-input[type=text] {
+/* Scoped to .field, which is the icon-and-input pair: the 2.5rem left padding
+   is the room the icon sits in. Unscoped, this reached every text input on the
+   page -- the editor's own fields included, which is where it indented every
+   value by 40px and set them in the wrong face. */
+.field input[type=text] {
   width:100%; font:13px var(--mono); color:var(--text);
   background:var(--glass-lo); border:1px solid var(--hair);
   border-radius:var(--pill); padding:.65rem 1rem .65rem 2.5rem;
@@ -326,7 +330,7 @@ input[type=text] {
   transition:border-color .2s var(--ease), box-shadow .2s var(--ease);
 }
 input[type=text]::placeholder { color:var(--faint); }
-input[type=text]:focus {
+.field input[type=text]:focus {
   outline:none; border-color:var(--hair-hi);
   box-shadow:0 0 0 4px rgba(223,186,115,.08);
 }
@@ -578,6 +582,12 @@ footer .legal { margin-top:.4rem; opacity:.8; }
 .fin.mono { font-family:var(--mono); font-size:.74rem; }
 .fin.narrow { max-width:8rem; }
 
+/* The switch is a page-level control elsewhere, where it is a whole row with
+   its own copy. Inside a field grid the label is already above it, so it
+   shrinks to just the track. */
+.frow .opt { padding:.35rem .55rem; margin:0; width:max-content; }
+.frow .opt > span:last-child:empty { display:none; }
+
 /* ----- named bits ----- */
 .bits { display:flex; flex-direction:column; gap:.3rem; }
 .bitrow { display:flex; flex-wrap:wrap; gap:.15rem .7rem; }
@@ -608,7 +618,9 @@ footer .legal { margin-top:.4rem; opacity:.8; }
 .combo-list {
   position:absolute; z-index:40; top:calc(100% + .2rem); left:0; right:0;
   max-height:15rem; overflow:auto; padding:.2rem;
-  background:var(--glass-hi); border:1px solid var(--hair); border-radius:.55rem;
+  /* Opaque, not glass: this floats over a dense grid of other fields, and
+     seeing them through it made the list unreadable. */
+  background:var(--ink-2); border:1px solid var(--hair-hi); border-radius:.55rem;
   -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
   box-shadow:var(--lift);
 }

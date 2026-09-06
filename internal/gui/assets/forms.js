@@ -52,7 +52,10 @@ function control(f, ref, ctx) {
     return input;
   }
   if (f.kind === "bool") {
-    const sw = optionSwitch("&nbsp;", asNumber(ref.get()) === 1);
+    // The field's own label sits above the control, so the switch carries no
+    // copy of its own: two "enabled"s stacked on top of each other is what
+    // that looked like.
+    const sw = optionSwitch("", asNumber(ref.get()) === 1);
     sw.input.disabled = !!f.readonly;
     sw.input.onchange = function () { ref.set(sw.input.checked ? 1 : 0); ctx.edited(); };
     return sw.node;
@@ -367,7 +370,7 @@ function equipNode(sec, value, ctx) {
     idRow.append(fieldLabel({ label: "item" }), idBox.node);
     grid.append(typeRow, idRow);
 
-    const sw = optionSwitch("enabled", ent.enabled !== false && ent.enabled !== 0);
+    const sw = optionSwitch("", ent.enabled !== false && ent.enabled !== 0);
     sw.input.onchange = function () { ent.enabled = sw.input.checked; ctx.edited(); };
     const enRow = el("div", "frow");
     enRow.append(fieldLabel({ label: "enabled" }), sw.node);
@@ -518,7 +521,8 @@ function sparseNode(sec, value, ctx) {
   } else {
     const box = combo({
       entries: table(sec.indexTable).list.filter(function (e) { return e.id < sec.count; }),
-      value: -1,
+      value: null,
+      clearAfterPick: true,
       placeholder: "Add one that is not here yet",
       onPick: function (id) {
         if (value[String(id)] !== undefined) { toast("That one is already here"); return; }
