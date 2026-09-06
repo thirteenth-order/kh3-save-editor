@@ -653,7 +653,7 @@ function jsonPane(state, check) {
 }
 /* -------------------------------------------------------------- folders -- */
 
-function folderPanel(canBrowse, dirs) {
+function folderPanel(canBrowse, dirs, remembered) {
   const wrap = el("div");
   const list = el("div");
   for (const d of dirs) {
@@ -738,6 +738,36 @@ function folderPanel(canBrowse, dirs) {
     controls.append(browse);
   }
   controls.append(field);
+
+  // Folders could only be forgotten one at a time, and only the ones that were
+  // added by hand: the autodetected rows carry no remove button, because they
+  // come straight back on the next scan. So a list that has drifted -- a moved
+  // folder, a backup zip that no longer exists, a path added while testing --
+  // had no way back to a clean slate short of editing the config file. This is
+  // that way back. It clears only what the store remembers; the autodetected
+  // folders are found again immediately, and nothing near a save is touched.
+  if (remembered > 0) {
+    const reset = pill("Forget saved folders", "i-refresh", "quiet danger");
+    reset.title = "Clear the folders this app has remembered";
+    reset.onclick = async function () {
+      const ok = await ask({
+        title: "Forget saved folders?",
+        sub: "This clears only the folders this app remembers. Your saves are not touched.",
+        lines: [
+          remembered === 1
+            ? "1 remembered folder will be forgotten."
+            : remembered + " remembered folders will be forgotten.",
+          "",
+          "Folders in the usual locations are detected again on the next scan.",
+        ],
+      });
+      if (!ok) return;
+      const res = await api("/api/folder", { clear: true });
+      toast(res.cleared === 1 ? "1 folder forgotten" : res.cleared + " folders forgotten", "good");
+      render();
+    };
+    controls.append(reset);
+  }
 
   wrap.append(controls, msg);
   return wrap;
@@ -1003,12 +1033,12 @@ function paintLibrary() {
     const blank = el("div", "empty");
     blank.append(el("h3", null, "No saves found yet"),
       el("p", null, "Checked Documents, OneDrive and the usual Proton prefixes. Point us at the folder once and it will be remembered."));
-    app.append(blank, folderPanel(data.canBrowse, []));
+    app.append(blank, folderPanel(data.canBrowse, [], data.remembered || 0));
     return;
   }
 
   app.append(heading("i-folder", "Save folders"));
-  app.append(folderPanel(data.canBrowse, data.dirs));
+  app.append(folderPanel(data.canBrowse, data.dirs, data.remembered || 0));
 
   app.append(heading("i-stack", "Saves"));
   const saves = el("div");

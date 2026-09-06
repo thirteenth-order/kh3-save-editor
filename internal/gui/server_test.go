@@ -258,6 +258,96 @@ func TestStoreRoundTrip(t *testing.T) {
 	}
 }
 
+// Forgetting folders one at a time only ever reached the ones added by hand,
+// so a store that had drifted could not be reset from the interface at all.
+func TestClearForgetsEveryRememberedFolderAndPersists(t *testing.T) {
+	dir := t.TempDir()
+	s := &store{path: filepath.Join(dir, "folders.json")}
+	s.add("/a")
+	s.add("/b")
+
+	if n := s.clear(); n != 2 {
+		t.Errorf("clear() = %d, want 2: the count is what the toast reports", n)
+	}
+	if got := s.list(); len(got) != 0 {
+		t.Errorf("still remembered in memory: %v", got)
+	}
+	// The point of clearing is that it survives a restart, which is the one
+	// thing removing entries by hand and then crashing would not give you.
+	if got := loadStore2(s.path).list(); len(got) != 0 {
+		t.Errorf("still remembered on disk: %v", got)
+	}
+	// Clearing an empty store is not an error and reports nothing removed, so
+	// the button can stay harmless if it is somehow pressed twice.
+	if n := s.clear(); n != 0 {
+		t.Errorf("clear() on an empty store = %d, want 0", n)
+	}
+}
+
+// The interface only offers the reset when the store holds something, and it
+// asks the server rather than counting rows: a folder that has been deleted is
+// still remembered, appears in no row, and is exactly what somebody resetting
+// is trying to get rid of.
+func TestScanReportsWhatIsRememberedNotWhatIsListed(t *testing.T) {
+	dir := t.TempDir()
+	s := &Server{token: newToken(), addr: "127.0.0.1:54321", mux: http.NewServeMux(),
+		folder: &store{path: filepath.Join(dir, "folders.json")}}
+	s.mux.HandleFunc("/api/scan", s.guard(s.handleScan))
+
+	gone := filepath.Join(dir, "since-deleted")
+	s.folder.add(gone)
+
+	r := httptest.NewRequest("GET", "http://127.0.0.1:54321/api/scan?t="+s.token, nil)
+	r.Host = "127.0.0.1:54321"
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("scan: code %d, want 200", w.Code)
+	}
+	var res scanResult
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if res.Remembered != 1 {
+		t.Errorf("remembered = %d, want 1 for a folder that no longer exists", res.Remembered)
+	}
+	for _, d := range res.Dirs {
+		if d.Path == gone {
+			t.Fatal("a folder that does not exist was listed as a save folder")
+		}
+	}
+}
+
+// The reset goes through the same endpoint as adding and removing, so the
+// branch it takes has to be the one asked for.
+func TestClearThroughTheAPIForgetsEverything(t *testing.T) {
+	dir := t.TempDir()
+	s := &Server{token: newToken(), addr: "127.0.0.1:54321", mux: http.NewServeMux(),
+		folder: &store{path: filepath.Join(dir, "folders.json")}}
+	s.mux.HandleFunc("/api/folder", s.guard(s.handleAddFolder))
+	s.folder.add("/a")
+	s.folder.add("/b")
+
+	r := httptest.NewRequest("POST", "http://127.0.0.1:54321/api/folder?t="+s.token,
+		strings.NewReader(`{"clear":true}`))
+	r.Host = "127.0.0.1:54321"
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("clear: code %d, want 200", w.Code)
+	}
+	var res folderResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if res.Cleared != 2 {
+		t.Errorf("cleared = %d, want 2", res.Cleared)
+	}
+	if got := s.folder.list(); len(got) != 0 {
+		t.Errorf("still remembered: %v", got)
+	}
+}
+
 func loadStore2(path string) *store {
 	s := &store{path: path}
 	data, err := os.ReadFile(path)
@@ -324,7 +414,7 @@ func TestUIReadsOnlyKeysWeSend(t *testing.T) {
 		dirInfo{},
 		scanResult{},
 		swapResponse{Backup: "x", Changes: []string{"x"}, Written: true},
-		folderResponse{Path: "x", Removed: "x", Canceled: true},
+		folderResponse{Path: "x", Removed: "x", Cleared: 1, Canceled: true},
 	} {
 		blob, _ := json.Marshal(v)
 		var m map[string]any

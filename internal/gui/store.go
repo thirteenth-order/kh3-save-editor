@@ -67,6 +67,25 @@ func (s *store) remove(p string) {
 	s.save()
 }
 
+// clear forgets every remembered folder and reports how many there were.
+//
+// Removing them one at a time is the only way there was, which is fine for a
+// folder added by mistake and useless for starting over: the autodetected ones
+// have no remove button at all, because they come back on the next scan, so a
+// list that has drifted cannot be reset by hand. This empties the file the
+// store is kept in; nothing on disk near a save is touched.
+func (s *store) clear() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := len(s.Paths)
+	if n == 0 {
+		return 0
+	}
+	s.Paths = nil
+	s.save()
+	return n
+}
+
 // save assumes the caller holds the lock.
 func (s *store) save() {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {

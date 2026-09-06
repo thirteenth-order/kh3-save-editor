@@ -194,6 +194,11 @@ type scanResult struct {
 	Dirs        []dirInfo `json:"dirs"`
 	GameRunning bool      `json:"gameRunning"`
 	CanBrowse   bool      `json:"canBrowse"`
+	// Remembered counts what the store holds, not what the list shows. A
+	// folder that has since been deleted or renamed is still remembered and
+	// still worth being able to clear, and it appears in no row, so counting
+	// the rows would hide exactly the case somebody wants to reset out of.
+	Remembered int `json:"remembered"`
 }
 
 type dirInfo struct {
@@ -279,6 +284,7 @@ type swapRequest struct {
 type folderResponse struct {
 	Path     string `json:"path,omitempty"`
 	Removed  string `json:"removed,omitempty"`
+	Cleared  int    `json:"cleared,omitempty"`
 	Canceled bool   `json:"canceled,omitempty"`
 }
 
@@ -386,6 +392,7 @@ func describeDir(p string) kh3.SaveDir {
 func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 	res := scan(s.saveDirs())
 	res.CanBrowse = pickerAvailable()
+	res.Remembered = len(s.folder.list())
 	writeJSON(w, http.StatusOK, res)
 }
 
@@ -419,9 +426,16 @@ func (s *Server) handleAddFolder(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Path   string `json:"path"`
 		Remove bool   `json:"remove"`
+		Clear  bool   `json:"clear"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req); err != nil {
 		fail(w, http.StatusBadRequest, "bad request: %v", err)
+		return
+	}
+	// Clear before Remove, so a request carrying both cannot be read as a
+	// removal of the empty path, which would silently do nothing.
+	if req.Clear {
+		writeJSON(w, http.StatusOK, folderResponse{Cleared: s.folder.clear()})
 		return
 	}
 	if req.Remove {
