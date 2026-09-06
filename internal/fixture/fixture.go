@@ -23,6 +23,15 @@ const Account = "76561190000000000"
 const (
 	PlainLen = 0x20000
 	FileSize = PlainLen - 24
+
+	// A full-size save. The short fixture above is a valid save structure and
+	// is what the golden vectors were built on, so it must never move; it also
+	// stops at 0x20000 and so never reaches the record block at the tail.
+	// FullPlainLen is the length a real decrypted slot has, so a test can
+	// exercise the far regions without touching the frozen fixture or a real
+	// save.
+	FullPlainLen = 0x94F4F0
+	FullFileSize = 0x94F4D8
 )
 
 // Options are the fields a caller may vary. The rest are fixed so that the
@@ -36,11 +45,78 @@ type Options struct {
 // Default returns the options the generator used for slot0.
 func Default() Options { return Options{Difficulty: 1, Level: 6, HP: 145, MP: 115} }
 
-// Build returns a structurally valid decrypted save.
-func Build(o Options) []byte {
-	p := make([]byte, PlainLen)
+// Build returns a structurally valid decrypted save. Its bytes are frozen:
+// TestGoldenFixturesStillMatch fails if any of them move, because the golden
+// vectors were computed from exactly this input.
+func Build(o Options) []byte { return build(PlainLen, FileSize, o) }
+
+// BuildFull returns a save the size of a real one, with the tail regions the
+// short fixture cannot reach filled in. Nothing in it comes from a real save.
+func BuildFull(o Options) []byte {
+	p := build(FullPlainLen, FullFileSize, o)
+
+	// Use counters and the bests that pair with them, chosen so the two agree:
+	// the attractions with a non-zero count are the ones with a best, which is
+	// the relationship the block was identified by.
+	for i, uses := range []int{2, 5, 0, 0, 0} {
+		kh3.SetAttractionUse(p, i, uses)
+		if uses > 0 {
+			kh3.SetAttractionHigh(p, i, int32(100+i*11))
+		}
+	}
+	kh3.SetShotlockUse(p, 4, 3)
+	kh3.SetShotlockHigh(p, 4, 812)
+
+	kh3.SetRecordScore(p, 0, 4200) // verum_rex_high_score
+	kh3.SetRecordScore(p, 8, 3)    // frozen_slider_medals
+	kh3.SetFlan(p, 1, kh3.Flan{HighScore: 640, HighScore2: 12, Attempts: 4})
+	kh3.SetPhotoMaxCount(p, 200)
+
+	kh3.SetString(p, kh3.StringFields[2], "/Game/Blueprints/Player/Sora")
+
+	// Sparse regions need at least one live entry each, or a document built
+	// from this save cannot show what those regions look like when they are
+	// used, and the schema test cannot check them against it.
+	kh3.SetStoryFlag(p, 12, 40)
+	kh3.SetStoryFlag(p, 13, 7)
+	kh3.SetMaterial(p, 1, 12)
+	kh3.SetMaterial(p, 34, 3)
+	kh3.SetKeychainUpgrade(p, 0, 2)
+
+	kh3.SetPartySlot(p, 0, 1)
+	kh3.SetPartySlot(p, 1, 2)
+	kh3.SetMagic(p, 0, 29)
+	kh3.SetLink(p, 0, 1)
+	kh3.SetShortcut(p, 0, 0, 29)
+
+	// Every character gets one slot of each of the four equipment arrays. The
+	// real evidence that the per-character stride and the four offsets are all
+	// right at once is that a full save names each guest's own weapon, so a
+	// fixture that leaves the arrays empty tests none of that.
+	for ci := range kh3.CharNames {
+		for _, e := range []struct {
+			off  int
+			slot int
+			eq   kh3.Equip
+		}{
+			{kh3.WeaponSlotOff, 0, kh3.Equip{ID: 1, ItemType: kh3.ItemTypeWeapon, Enabled: true}},
+			{kh3.ArmorSlotOff, 0, kh3.Equip{ID: 1, ItemType: kh3.ItemTypeArmor, Enabled: true}},
+			{kh3.AccessorySlotOff, 0, kh3.Equip{ID: 1, ItemType: kh3.ItemTypeAccessory, Enabled: true}},
+			{kh3.ItemSlotOff, 0, kh3.Equip{ID: 1, ItemType: kh3.ItemTypeConsumable, Enabled: true}},
+		} {
+			kh3.SetEquip(p, ci, e.off, e.slot, e.eq)
+		}
+		kh3.SetAI(p, ci, kh3.AI{CombatStyle: 1, AbilityUse: 1, RecoveryUse: 2, RecoveryTargets: 3})
+	}
+
+	reseal(p, FullFileSize)
+	return p
+}
+
+func build(size, fileSize int, o Options) []byte {
+	p := make([]byte, size)
 	copy(p[0:4], kh3.Magic)
-	binary.LittleEndian.PutUint32(p[0x04:], FileSize)
+	binary.LittleEndian.PutUint32(p[0x04:], uint32(fileSize))
 	binary.LittleEndian.PutUint16(p[0x08:], 5)
 	binary.LittleEndian.PutUint16(p[0x0A:], 2)
 	p[0x14] = o.Difficulty
@@ -79,8 +155,14 @@ func Build(o Options) []byte {
 	copy(p[0xBBA0:], "/Game/Levels/he/he_02/he_02")
 	copy(p[0xBCA0:], "he_02_Lv_Save_02")
 
-	binary.LittleEndian.PutUint32(p[0x0C:], crc32.ChecksumIEEE(p[0x10:0x10+FileSize]))
+	reseal(p, fileSize)
 	return p
+}
+
+// reseal rebuilds the CRC over the prefix the filesize field bounds, which is
+// the one integrity field a decrypted save carries.
+func reseal(p []byte, fileSize int) {
+	binary.LittleEndian.PutUint32(p[0x0C:], crc32.ChecksumIEEE(p[0x10:0x10+fileSize]))
 }
 
 // Slots returns the three saves the generator writes, keyed by slot number:
