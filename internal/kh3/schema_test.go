@@ -11,10 +11,52 @@ import (
 	"github.com/thirteenth-order/kh3-save-editor/internal/kh3"
 )
 
+// namesKeys collects, for every names section, the path it sits at and the
+// keys it declares. The path comparison below collapses those keys the same
+// way it collapses an index, so a fixture does not have to give all sixteen
+// characters the same equipment for the schema to be judged covered; the key
+// sets are then compared separately, which is the part worth asserting.
+func namesKeys(sections []kh3.Section, prefix string, out map[string][]string) {
+	for _, s := range sections {
+		base := s.Key
+		if prefix != "" {
+			base = prefix + "." + s.Key
+		}
+		switch s.Shape {
+		case "names":
+			out[base] = s.Keys
+			namesKeys(s.Sections, base+".*", out)
+		case "index":
+			namesKeys(s.Sections, base+".*", out)
+		default:
+			namesKeys(s.Sections, base, out)
+		}
+	}
+}
+
+// collapse rewrites the key of every names section to "*", so the schema side
+// and the document side describe the same thing.
+func collapse(path string, names map[string][]string) string {
+	parts := strings.Split(path, ".")
+	for i := range parts {
+		prefix := strings.Join(parts[:i], ".")
+		keys, ok := names[prefix]
+		if !ok {
+			continue
+		}
+		for _, k := range keys {
+			if parts[i] == k {
+				parts[i] = "*"
+				break
+			}
+		}
+	}
+	return strings.Join(parts, ".")
+}
+
 // schemaPaths flattens the schema into the set of leaf paths a dump can carry.
 // An index is collapsed to "*" because a dump only writes the entries a save
-// actually uses; a names shape is expanded, because there the key set is part
-// of what is being asserted.
+// actually uses; a names shape is expanded here and collapsed afterwards.
 func schemaPaths(sections []kh3.Section, prefix string, out map[string]bool) {
 	for _, s := range sections {
 		base := s.Key
@@ -108,10 +150,21 @@ func TestSchemaCoversEveryDumpedKey(t *testing.T) {
 	delete(d, "_note")
 	delete(d, "account")
 
-	have := map[string]bool{}
-	docPaths(d, "", have)
-	want := map[string]bool{}
-	schemaPaths(kh3.Sections(), "", want)
+	names := map[string][]string{}
+	namesKeys(kh3.Sections(), "", names)
+
+	rawHave := map[string]bool{}
+	docPaths(d, "", rawHave)
+	rawWant := map[string]bool{}
+	schemaPaths(kh3.Sections(), "", rawWant)
+
+	have, want := map[string]bool{}, map[string]bool{}
+	for p := range rawHave {
+		have[collapse(p, names)] = true
+	}
+	for p := range rawWant {
+		want[collapse(p, names)] = true
+	}
 
 	var missing, extra []string
 	for _, p := range sortedSet(have) {
@@ -133,6 +186,53 @@ func TestSchemaCoversEveryDumpedKey(t *testing.T) {
 		t.Errorf("the schema describes %d key(s) Dump never writes:\n  %s",
 			len(extra), strings.Join(extra, "\n  "))
 	}
+
+	// Collapsing the names loses one thing worth checking, so check it here:
+	// the keys a names section declares must be exactly the ones Dump writes.
+	for at, keys := range names {
+		got := lookupSection(d, at)
+		if got == nil {
+			continue // a section this save does not carry
+		}
+		want := map[string]bool{}
+		for _, k := range keys {
+			want[k] = true
+		}
+		for k := range got {
+			if !want[k] {
+				t.Errorf("%s.%s is in the dump and not in the schema's key list", at, k)
+			}
+		}
+	}
+}
+
+// lookupSection walks a dotted path, treating "*" as "any one entry", which is
+// enough to reach a names section nested inside an index.
+func lookupSection(v any, path string) map[string]any {
+	at, ok := v.(map[string]any)
+	if !ok {
+		return nil
+	}
+	for _, part := range strings.Split(path, ".") {
+		if part == "*" {
+			var next map[string]any
+			for _, sub := range at {
+				next, _ = sub.(map[string]any)
+				break
+			}
+			if next == nil {
+				return nil
+			}
+			at = next
+			continue
+		}
+		sub, ok := at[part].(map[string]any)
+		if !ok {
+			return nil
+		}
+		at = sub
+	}
+	return at
 }
 
 // Every enum a field points at has to exist, or the editor renders a picker

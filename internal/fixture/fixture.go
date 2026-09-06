@@ -83,30 +83,40 @@ func BuildFull(o Options) []byte {
 	kh3.SetMaterial(p, 34, 3)
 	kh3.SetKeychainUpgrade(p, 0, 2)
 
-	kh3.SetPartySlot(p, 0, 1)
-	kh3.SetPartySlot(p, 1, 2)
-	kh3.SetMagic(p, 0, 29) // Fire
-	kh3.SetLink(p, 0, 70)  // Meow Wow Balloon
+	// Donald, Goofy and the guest an Olympus save would be carrying, so the
+	// party line reads the way a real one does.
+	kh3.SetPartySlot(p, 0, 11) // Donald
+	kh3.SetPartySlot(p, 1, 12) // Goofy
+	kh3.SetPartySlot(p, 2, 16) // Hercules
+	kh3.SetMagic(p, 0, 29)     // Fire
+	kh3.SetLink(p, 0, 70)      // Meow Wow Balloon
 	kh3.SetShortcut(p, 0, 0, 29)
 
-	// Every character gets one slot of each of the four equipment arrays. The
-	// real evidence that the per-character stride and the four offsets are all
-	// right at once is that a full save names each guest's own weapon, so a
-	// fixture that leaves the arrays empty tests none of that.
-	for ci := range kh3.CharNames {
-		for _, e := range []struct {
-			off  int
-			slot int
-			eq   kh3.Equip
-		}{
-			{kh3.WeaponSlotOff, 0, kh3.Equip{ID: 1, ItemType: kh3.ItemTypeWeapon, Enabled: true}},
-			{kh3.ArmorSlotOff, 0, kh3.Equip{ID: 1, ItemType: kh3.ItemTypeArmor, Enabled: true}},
-			{kh3.AccessorySlotOff, 0, kh3.Equip{ID: 1, ItemType: kh3.ItemTypeAccessory, Enabled: true}},
-			{kh3.ItemSlotOff, 0, kh3.Equip{ID: 1, ItemType: kh3.ItemTypeConsumable, Enabled: true}},
-		} {
-			kh3.SetEquip(p, ci, e.off, e.slot, e.eq)
-		}
-		kh3.SetAI(p, ci, kh3.AI{CombatStyle: 1, AbilityUse: 1, RecoveryUse: 2, RecoveryTargets: 3})
+	// Sora and the three who stand beside him in Olympus, each with the weapon
+	// that character actually carries. The strongest evidence that the
+	// per-character stride, the four equipment offsets and the type-byte
+	// dispatch are all right at once is that a full save names every guest's
+	// own weapon, and a fixture that gives all sixteen the same one tests none
+	// of that. The other twelve are left empty, which is also what a save an
+	// hour and a half in looks like.
+	for _, c := range []struct {
+		char   int
+		weapon int
+	}{
+		{0, 1},  // Sora, Kingdom Key
+		{1, 21}, // Donald, Mage's Staff
+		{2, 41}, // Goofy, Knight's Shield
+		{3, 69}, // Hercules, Heart of a Hero
+	} {
+		kh3.SetEquip(p, c.char, kh3.WeaponSlotOff, 0,
+			kh3.Equip{ID: c.weapon, ItemType: kh3.ItemTypeWeapon, Enabled: true})
+		kh3.SetEquip(p, c.char, kh3.ArmorSlotOff, 0,
+			kh3.Equip{ID: 1, ItemType: kh3.ItemTypeArmor, Enabled: true})
+		kh3.SetEquip(p, c.char, kh3.AccessorySlotOff, 0,
+			kh3.Equip{ID: 1, ItemType: kh3.ItemTypeAccessory, Enabled: true})
+		kh3.SetEquip(p, c.char, kh3.ItemSlotOff, 0,
+			kh3.Equip{ID: 1, ItemType: kh3.ItemTypeConsumable, Enabled: true})
+		kh3.SetAI(p, c.char, kh3.AI{CombatStyle: 1, AbilityUse: 1, RecoveryUse: 2, RecoveryTargets: 3})
 	}
 
 	reseal(p, FullFileSize)
