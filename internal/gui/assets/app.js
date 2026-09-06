@@ -800,7 +800,6 @@ function workspaceHead(slot, doc, session, reload) {
     chip("i-clock", h.playtime),
     chip("i-coin", h.munny + " munny"));
   if (h.saves_count) facts.append(chip("i-stack", "saved " + h.saves_count + "×"));
-  if (h.saved_at) facts.append(chip("i-clock", "written " + h.saved_at, "mono"));
   box.append(facts);
 
   // The warning belongs where the writing happens, and it is only true of a

@@ -40,7 +40,29 @@ func TestSavedAtIsReportedAndIgnoredOnPatch(t *testing.T) {
 	const ticks = 637135310456780000
 	binary.LittleEndian.PutUint64(p[kh3.SavedAtOff:], uint64(ticks))
 
-	doc, err := kh3.Dump(p, "", kh3.CharCount)
+	// A wall-clock write time says when somebody was playing, so it rides the
+	// same explicit opt-in as the account id: absent from the dump people
+	// share, present in the one they asked to identify.
+	shared, err := kh3.Dump(p, "", kh3.CharCount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var s struct {
+		Header map[string]any `json:"header"`
+	}
+	if err := json.Unmarshal(shared, &s); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := s.Header["saved_at"]; ok {
+		t.Errorf("a dump with no account id carried saved_at %v", got)
+	}
+	// The whole body, not just the key: the point is that the timestamp is not
+	// in what gets pasted, wherever it might have been rendered.
+	if bytes.Contains(shared, []byte("2020-01-02")) {
+		t.Error("a dump with no account id still spells out the write time")
+	}
+
+	doc, err := kh3.Dump(p, "76561190000000000", kh3.CharCount)
 	if err != nil {
 		t.Fatal(err)
 	}

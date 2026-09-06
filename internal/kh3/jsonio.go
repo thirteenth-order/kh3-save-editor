@@ -165,9 +165,9 @@ func Dump(plain []byte, account string, characters int) ([]byte, error) {
 		ro = append(ro, k)
 	}
 	sort.Strings(ro)
-	doc.set("_note", "Absent keys are left unchanged on patch. The account id is "+
-		"omitted unless explicitly requested, because a dump is often shared. "+
-		"Read-only: "+strings.Join(ro, ", "))
+	doc.set("_note", "Absent keys are left unchanged on patch. The account id and "+
+		"saved_at are omitted unless explicitly requested, because a dump is often "+
+		"shared. Read-only: "+strings.Join(ro, ", "))
 	if account == "" {
 		doc.set("account", nil)
 	} else {
@@ -190,7 +190,14 @@ func Dump(plain []byte, account string, characters int) ([]byte, error) {
 			h.set(sf.Name, GetString(plain, sf))
 		}
 		h.set("playtime", ReadHeader(plain).Playtime())
-		h.set("saved_at", ReadHeader(plain).SavedAtString())
+		// saved_at is the one field that says when somebody was playing, to the
+		// millisecond, and a dump is the thing people paste into an issue. It is
+		// owner context rather than playthrough state, the same class as the
+		// account id, so it travels on the same explicit opt-in and is absent by
+		// default. Patch ignores it either way.
+		if account != "" {
+			h.set("saved_at", ReadHeader(plain).SavedAtString())
+		}
 		h.set("world_logo_name", WorldName(int(plain[0x18])))
 		h.set("location_name", LocationName(int(plain[0x54])))
 		h.set("save_icon_name", IconName(int(plain[0x60])))

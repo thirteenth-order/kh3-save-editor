@@ -295,7 +295,7 @@ func cmdInfo(args []string) error {
 	// The account id is a SteamID64 and the key is derived from it alone, so
 	// either one identifies the Steam account. This output is what gets pasted
 	// into bug reports, so both are opt-in.
-	withAccount := f.Bool("with-account", false, "show the account id")
+	withAccount := f.Bool("with-account", false, "show the account id and the time the save was written")
 	showKey := f.Bool("show-key", false, "show the derived AES key (identifies your account)")
 	long := f.Bool("l", false, "also show party, equipment, magic, materials and story progress")
 	rest, err := parseArgs(f, args)
@@ -336,7 +336,9 @@ func cmdInfo(args []string) error {
 		fmt.Printf("  location     %d (%s)\n", h.Location, kh3.LocationName(int(h.Location)))
 		fmt.Printf("  saves %d   enemies defeated %d   crabs %d\n",
 			h.SavesCount, h.EnemiesDefeated, kh3.GetCrabs(l.plain))
-		if t := h.SavedAtString(); t != "" {
+		// Same opt-in as the account: a wall-clock write time says when
+		// somebody was playing, and this output gets pasted into bug reports.
+		if t := h.SavedAtString(); t != "" && *withAccount {
 			fmt.Printf("  written      %s\n", t)
 		}
 		fmt.Printf("  bonuses      hp %d mp %d str %d mag %d def %d\n",
@@ -689,7 +691,7 @@ func cmdDecrypt(args []string) error {
 	var account, outDir string
 	f := fs("decrypt", &account)
 	f.StringVar(&outDir, "o", "plain", "output directory")
-	withAccount := f.Bool("with-account", false, "show the account id")
+	withAccount := f.Bool("with-account", false, "show the account id and the time the save was written")
 	rest, err := parseArgs(f, args)
 	if err != nil {
 		return err
@@ -860,7 +862,7 @@ func cmdRekey(args []string) error {
 	f := fs("rekey", &account)
 	f.StringVar(&to, "to", "", "destination SteamID64")
 	f.StringVar(&outDir, "o", "rekeyed", "output directory")
-	withAccount := f.Bool("with-account", false, "show the account ids")
+	withAccount := f.Bool("with-account", false, "show the account ids and the time the save was written")
 	rest, err := parseArgs(f, args)
 	if err != nil {
 		return err
@@ -1008,7 +1010,8 @@ func cmdDump(args []string) error {
 	f.StringVar(&out, "o", "", "write here instead of stdout")
 	chars := f.Int("characters", 3, "how many characters to include")
 	withAccount := f.Bool("with-account", false,
-		"include the account id; it identifies your Steam account, so it is omitted by default")
+		"include the account id and saved_at; both identify your Steam account and when\n"+
+			"you were playing, so a dump omits them by default")
 	rest, err := parseArgs(f, args)
 	if err != nil {
 		return err

@@ -351,7 +351,8 @@ func headerSchema() []Field {
 		SlotOnly: true, Offset: hexOff(SavedAtOff),
 		Note: "wall-clock time the game wrote the save, UTC; an int64 of 100ns " +
 			"ticks since 0001-01-01 (UE4 FDateTime). Empty if the save carries " +
-			"none. Reported, never written"})
+			"none. Reported, never written, and omitted from a dump unless the " +
+			"account id is explicitly requested"})
 	return out
 }
 

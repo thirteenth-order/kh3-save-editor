@@ -137,7 +137,10 @@ func sortedSet(m map[string]bool) []string {
 // added; this fails the build instead. It runs on the full-size fixture so the
 // record block is in the document too.
 func TestSchemaCoversEveryDumpedKey(t *testing.T) {
-	doc, err := kh3.Dump(fixture.BuildFull(fixture.Default()), "", kh3.CharCount)
+	// Dumped with an account id so the document is the widest one the tool can
+	// produce: saved_at rides that opt-in, and the schema describes the format
+	// rather than whichever subset a given dump chose to carry.
+	doc, err := kh3.Dump(fixture.BuildFull(fixture.Default()), fixture.Account, kh3.CharCount)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -163,7 +163,6 @@ function ovWhere(doc) {
     ["i-sparkle", "save icon", h.save_icon_name],
     ["i-users", "player", h.player_script],
     ["i-users", "character", h.player_character],
-    ["i-clock", "written", h.saved_at],
   ];
   let any = false;
   for (const r of rows) {
