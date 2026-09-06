@@ -6,9 +6,11 @@
 
 **Read and edit a Kingdom Hearts III save, offline.** Change the difficulty
 mid-playthrough, or edit anything else the format holds: equipment, party,
-abilities, inventory, synthesis materials, magic, shortcuts and story progress.
-Reversible and checksummed. No running game, no memory hooks, no real-time
-capture.
+abilities, inventory, synthesis materials, magic, shortcuts, story progress,
+minigame records and the level a save reloads into. Every field is named,
+ranged and pickable from the real game tables, in the browser or from the
+command line. Reversible and checksummed. No running game, no memory hooks, no
+real-time capture.
 
 [![ci](https://github.com/thirteenth-order/kh3-save-editor/actions/workflows/ci.yml/badge.svg)](https://github.com/thirteenth-order/kh3-save-editor/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/thirteenth-order/kh3-save-editor?color=dfba73)](https://github.com/thirteenth-order/kh3-save-editor/releases/latest)
@@ -17,7 +19,7 @@ capture.
 [![go version](https://img.shields.io/github/go-mod/go-version/thirteenth-order/kh3-save-editor)](go.mod)
 [![license](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
-<img src="docs/screenshot-saves.png" alt="The kh3save interface listing save slots with a difficulty picker" width="720">
+<img src="docs/screenshot-saves.png" alt="The kh3save interface listing save slots, each with a difficulty picker and a button that opens the editor" width="720">
 
 </div>
 
@@ -188,6 +190,43 @@ Add `-n` to preview without writing. Coming back down reverses all of it, with
 guards: an ability granted by a keyblade rather than by difficulty is left
 alone, because removing it would desync the save from the gear still equipped.
 
+## The interface
+
+Running the binary with no arguments opens it. It finds your saves, and each
+one gets a difficulty picker and an editor behind **Open editor**. The editor
+is three views over one document, and all three write through exactly the same
+checks the `patch` subcommand uses, so neither can accept something the other
+would refuse.
+
+**Summary** is what the save says, in a sentence per region: world, party,
+magic, materials, story progress, and what each character is wearing.
+
+**Fields** is a form, and it is not hand-written. The program publishes a
+description of every field it can edit -- what each one is called, which table
+names its ids, what range the format allows, and where it is stored -- and the
+page builds itself out of that. So every choice is a picker over the real game
+table rather than a number box, and a field added to the format shows up here
+with no interface work at all. An equipment slot is the clearest case: the type
+byte selects which of KH3's ten item id spaces the id belongs to, so choosing a
+type re-points the item picker at the table that names ids of that type.
+
+<img src="docs/screenshot-fields.png" alt="The Fields view: collapsible sections for header, party, shortcuts, magic, links, story progress, materials, inventory, keychain upgrades, records and characters, with Sora expanded to show stats and an accessory slot whose type and item are chosen from named lists" width="720">
+
+**Document** is the JSON itself, with line numbers, highlighting, and a
+validator that runs as you type: it marks the line, names the path and says
+what is wrong, and it knows the difference between a value the *format* cannot
+hold and one the *game* will never show you. Level 640 does not fit in the
+byte, so it is an error; level 120 fits perfectly well and is a warning. A
+scope picker narrows the box to one section or one character, because a whole
+dump is a lot of text to hunt through when the thing being changed is one
+character's abilities.
+
+<img src="docs/screenshot-json.png" alt="The Document view: a JSON editor with line numbers and syntax highlighting, two lines marked in the gutter, and a panel listing the problems -- an unknown header key and a level above the maximum the field can hold" width="720">
+
+Nothing is written until the server has agreed: **Preview changes** asks it what
+the document would do and prints the list, and **Apply** shows the same list for
+confirmation before writing. A timestamped backup comes first either way.
+
 ## Command line
 
 The interface covers the common case. The CLI covers the rest.
@@ -204,7 +243,12 @@ kh3save rekey     <save>  -to <id>   # move a save between Steam accounts
 kh3save convert   <save>  -to plain  # strip or add the Steam wrapper
 kh3save dump      <save>  -o s.json  # render as JSON
 kh3save patch     <save>  s.json     # apply a partial JSON document
+kh3save schema                       # every editable field, and its range
 ```
+
+`schema` prints the same field description the interface builds its editor out
+of, so "what can this actually edit?" has an answer that does not involve
+opening a browser. `-json` gives the whole thing, enum tables included.
 
 The account id is detected from the save path. Override it with `-account` or
 `$KH3_ACCOUNT`. In-place edits are always backed up first.
@@ -279,7 +323,7 @@ copied straight back over the original. **The game cannot read an archive**, so
 unpack it back into your save folder before playing.
 
 <details>
-<summary><b>Editing fields the interface does not expose</b></summary>
+<summary><b>The JSON editing surface, in detail</b></summary>
 
 <br>
 
@@ -327,9 +371,9 @@ read-only and moving one is an error, though a document that carries them
 unchanged is fine. Unknown characters, unknown keys and out-of-range indexes
 are errors rather than silent no-ops.
 
-The interface exposes the same thing: **Details** on a save renders the
-document as a summary, and **Edit as JSON** hands you the document to change,
-previews what it would do, and applies it through exactly the same checks.
+The interface is the same two functions: its **Document** view is this
+document, and its **Fields** view is a form generated from `kh3save schema`.
+Neither can validate differently from the CLI, because both call `Patch`.
 
 </details>
 
@@ -370,6 +414,37 @@ trailer_md5      = md5(plain[: filesize + 16])
 ```
 
 Getting either wrong is what corrupts a save.
+
+### Finding the record block
+
+The struct map matches KHSave.Lib3's `SaveKh3u109` up to the link array at
+`0xBF68`, and past that the two builds diverge: upstream's file-size field is
+`0x94F2F8` and this build's is `0x94F4D8`. Upstream puts the minigame and
+Flantastic Seven records at `0x83AF8`, and on this build that address lands on
+unrelated data, which is why the block went unmapped for a long time rather
+than being guessed at.
+
+It is `0x1E0` later, and three independent facts say so:
+
+1. The two file-size fields differ by exactly `0x1E0`, so everything past
+   whatever was inserted moves by that much.
+2. Shifted by `0x1E0`, the five attraction bests land on `0x83D94` and end at
+   `0x83DA8` -- the exact byte where the last live data in that region stops.
+   The three that read non-zero are the same three whose *use* counters at
+   `0x696` are non-zero, across five sample saves including one that has used
+   no attraction at all, where all five bests read zero.
+3. Shifted by the same `0x1E0`, upstream's photo-album limit lands on a field
+   reading 200, which is the album limit the game advertises.
+
+Landmarks 2 and 3 sit `0x1284` apart and agree on the same constant, so this is
+a measured offset rather than a guess. Only the attraction bests are confirmed
+against gameplay; everything else in the block reads zero in every sample save,
+which is what an hour and a half into Olympus should look like, since none of
+that content is reachable that early. `kh3save schema` prints which fields
+carry that caveat.
+
+The album itself is still not mapped, and will not be: it is the 98.6% of the
+file described above, and it holds image blobs.
 
 ### Key derivation
 
@@ -494,6 +569,13 @@ make docker-smoke  # build the image and drive it end to end
 `make ci` needs Go, plus a Python 3 for `tables-check` -- the one Python left
 in the tree is `tools/gen_tables.py`, and it is stdlib only. `make docker-smoke`
 is the one target that needs Docker, which is why it is not part of `ci`.
+
+It will also run the browser half if `node` is on the path, and skip it with a
+message if not. `tools/jscheck` runs the page's own validator, JSON editor and
+form builder outside a browser -- against the same schema the server serves and
+a dump of the same fixture the Go tests use -- because otherwise that is a
+thousand lines nothing checks. Its `dom.js` is the smallest DOM those builders
+actually touch; it is not a browser and does not try to be one.
 
 ### Building without installing a toolchain
 
