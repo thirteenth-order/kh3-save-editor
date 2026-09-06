@@ -84,9 +84,9 @@ func TestTheEpicFallbackDoesNotShadowSteam(t *testing.T) {
 // above SaveGames is offered as well.
 func TestCandidatesFromPathTakesTheDirectoryAboveSaveGames(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "KINGDOM HEARTS III", "Epic Games Store",
-		"ec588173027141ca830c671ff0914555", "SaveGames", "kh3sv2", "data", "KHIII_slot0.bin")
+		"not-a-numeric-account-id", "SaveGames", "kh3sv2", "data", "KHIII_slot0.bin")
 	got := candidatesFromPath(p)
-	if len(got) == 0 || got[0] != "ec588173027141ca830c671ff0914555" {
+	if len(got) == 0 || got[0] != "not-a-numeric-account-id" {
 		t.Errorf("candidatesFromPath(%q) = %q; the directory above SaveGames should come first", p, got)
 	}
 }
