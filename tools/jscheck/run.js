@@ -138,8 +138,9 @@ function ok(name, cond, extra) {
 }
 
 (async function () {
-  mods = await Promise.all(["diffs.js", "ui.js", "editor.js", "schema.js",
-                            "forms.js", "overview.js", "legal.js"].map(load));
+  mods = await Promise.all(["diffs.js", "ui.js", "icons.js", "editor.js", "schema.js",
+                            "forms.js", "overview.js", "legal.js", "swap.js",
+                            "json.js", "folders.js"].map(load));
   await get("loadSchema")();
   const loadedSchema = get("SCHEMA");
   const validate = get("validate");

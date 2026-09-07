@@ -13,6 +13,7 @@ import (
 	"regexp"
 
 	"github.com/thirteenth-order/kh3-save-editor/internal/kh3"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -393,20 +394,52 @@ func TestJSONContract(t *testing.T) {
 	}
 }
 
-// Guard against the mismatch that actually happened: the page read slot.name
-// while the server sent difficultyName, so the pill rendered blank.
-func TestUIReadsOnlyKeysWeSend(t *testing.T) {
-	// The markup and the scripts are separate assets now, so scan all of them.
-	var page []byte
-	for _, name := range []string{"assets/index.html", "assets/diffs.js", "assets/ui.js",
-		"assets/editor.js", "assets/schema.js", "assets/forms.js", "assets/overview.js",
-		"assets/legal.js", "assets/app.js"} {
-		blob, err := assets.ReadFile(name)
+// allPageSource is every script the server will serve, plus the markup,
+// concatenated for the two greps below.
+//
+// It is derived from staticFiles rather than listed, because it used to be
+// listed -- twice -- and a new module had to be remembered in three places or
+// the grep silently stopped covering it. Reading the allow-list means a module
+// is scanned from the moment it can be served, which is the moment it matters.
+func allPageSource(t *testing.T) []byte {
+	t.Helper()
+	var names []string
+	for name := range staticFiles {
+		if strings.HasSuffix(name, ".js") {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names) // staticFiles is a map, so fix an order
+	if len(names) < 5 {
+		t.Fatalf("only %d scripts on the allow-list; it cannot be that short", len(names))
+	}
+	return pageSource(t, append([]string{"index.html"}, names...)...)
+}
+
+// pageSource concatenates named assets. Every name but index.html must be on
+// the allow-list, so a caller naming a script the server will not serve fails
+// here rather than quietly scanning nothing.
+func pageSource(t *testing.T, names ...string) []byte {
+	t.Helper()
+	var out []byte
+	for _, name := range names {
+		if _, served := staticFiles[name]; !served && name != "index.html" {
+			t.Fatalf("%s is not on the allow-list, so it is not part of the page", name)
+		}
+		blob, err := assets.ReadFile("assets/" + name)
 		if err != nil {
 			t.Fatal(err)
 		}
-		page = append(page, blob...)
+		out = append(out, blob...)
+		out = append(out, '\n')
 	}
+	return out
+}
+
+// Guard against the mismatch that actually happened: the page read slot.name
+// while the server sent difficultyName, so the pill rendered blank.
+func TestUIReadsOnlyKeysWeSend(t *testing.T) {
+	page := allPageSource(t)
 	// Populate every field: omitempty would otherwise hide keys the page reads.
 	sent := map[string]bool{}
 	for _, v := range []any{
@@ -1230,15 +1263,16 @@ func quote(s string) string {
 // silently renders nothing. Same idea as TestUIReadsOnlyKeysWeSend, for the
 // other payload.
 func TestUIReadsOnlySchemaKeysWeSend(t *testing.T) {
-	var page []byte
-	for _, name := range []string{"assets/schema.js", "assets/forms.js",
-		"assets/overview.js", "assets/app.js"} {
-		blob, err := assets.ReadFile(name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		page = append(page, blob...)
-	}
+	// Curated, unlike the payload grep above, and it has to stay that way: the
+	// regex below matches `f.` and `sec.`, which are ordinary local names, so
+	// scanning a module that never touches the schema reports its own
+	// variables as missing schema keys. legal.js builds sections with a title
+	// and a body and is exactly that case.
+	//
+	// The guard against the list going stale is that every name in it must
+	// still be a script the server serves, so a renamed or removed module
+	// fails here rather than falling silently out of the scan.
+	page := pageSource(t, "schema.js", "forms.js", "overview.js", "app.js")
 
 	// Marshal a schema and collect every key name that appears anywhere in it,
 	// at any depth: the script reaches into sections, fields and entries alike.
