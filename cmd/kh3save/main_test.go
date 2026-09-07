@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -316,4 +317,33 @@ func firstLines(b []byte, n int) string {
 		lines = lines[:n]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// The usage screen and the dispatch table are two lists of the same commands,
+// and two lists of the same thing drift: the one that runs them is the one
+// that gets updated. Neither may name a command the other does not.
+//
+// The lines are matched on the single space after "kh3save", which is what the
+// command column is padded from, so the no-argument line -- whose first word
+// is prose -- contributes nothing and needs no special case.
+func TestUsageAndTheDispatchTableNameTheSameCommands(t *testing.T) {
+	documented := map[string]bool{}
+	for _, line := range strings.Split(usage, "\n") {
+		if m := regexp.MustCompile(`^  kh3save (\S+)`).FindStringSubmatch(line); m != nil {
+			documented[m[1]] = true
+		}
+	}
+	if len(documented) == 0 {
+		t.Fatal("no command lines found in the usage screen, so this test asserts nothing")
+	}
+	for name := range commands {
+		if !documented[name] {
+			t.Errorf("%q can be run but the usage screen does not mention it", name)
+		}
+	}
+	for name := range documented {
+		if commands[name] == nil {
+			t.Errorf("the usage screen documents %q, which no longer runs", name)
+		}
+	}
 }

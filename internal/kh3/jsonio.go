@@ -822,7 +822,7 @@ func Patch(plain, doc []byte) ([]byte, []string, error) {
 
 	if chars, ok := d["characters"].(map[string]any); ok {
 		for _, cname := range sortedKeys(chars) {
-			ci := charIndex(cname)
+			ci := CharIndex(cname)
 			if ci < 0 {
 				return nil, nil, fmt.Errorf("unknown character %q", cname)
 			}
@@ -1327,7 +1327,10 @@ func findStat(name string) (struct {
 	return charStats[0], false
 }
 
-func charIndex(name string) int {
+// CharIndex is the position of a character in CharNames, or -1. It is exported
+// because the CLI needs the same lookup for -character and was carrying its own
+// copy of this loop.
+func CharIndex(name string) int {
 	for i, n := range CharNames {
 		if n == name {
 			return i
