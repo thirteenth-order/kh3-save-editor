@@ -1036,7 +1036,7 @@ func cmdGrantAbilities(args []string) error {
 func cmdDump(args []string) error {
 	var account, out string
 	f := fs("dump", &account)
-	f.StringVar(&out, "o", "", "write here instead of stdout")
+	f.StringVar(&out, "o", "", "write here instead of stdout (one save only)")
 	chars := f.Int("characters", 3, "how many characters to include")
 	withAccount := f.Bool("with-account", false,
 		"include the account id and saved_at; both identify your Steam account and when\n"+
@@ -1048,6 +1048,15 @@ func cmdDump(args []string) error {
 	paths, err := expand(rest)
 	if err != nil {
 		return err
+	}
+	// -o names one file, not an output directory the way it does everywhere
+	// else here, so more than one save means each dump overwriting the last.
+	// That used to happen in silence, printing a confident "-> f.json" per save
+	// while only the final one survived. One save expands to many easily: a
+	// directory or a .zip is an accepted argument.
+	if out != "" && len(paths) > 1 {
+		return fmt.Errorf("-o writes a single file, but that names %d saves; "+
+			"dump them one at a time, or drop -o and redirect stdout", len(paths))
 	}
 	for _, p := range paths {
 		l, err := load(p, account)

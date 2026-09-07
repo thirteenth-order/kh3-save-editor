@@ -246,3 +246,74 @@ func TestBuildVersionPrefersTheStampAndFallsBack(t *testing.T) {
 		t.Error("buildVersion() leaked Go's placeholder instead of saying dev")
 	}
 }
+
+// dump -o names one file, unlike every other -o here, which names a directory.
+// Given several saves it wrote each one over the last and printed a confident
+// "-> f.json" for every one of them, so the command reported N successes and
+// left a single file. Two ordinary arguments reach that state without anybody
+// asking for it: a directory and a .zip both expand to every slot inside.
+func TestDumpRefusesToOverwriteOneFilePerSave(t *testing.T) {
+	dir := t.TempDir()
+	key, err := kh3.DeriveKey(fixture.Account)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Two saves that differ in a field a dump prints, so the check below can
+	// tell which one landed rather than only that something did.
+	var saves []string
+	for _, c := range []struct {
+		name  string
+		level byte
+	}{{"KHIII_slot0.bin", 6}, {"KHIII_slot1.bin", 41}} {
+		o := fixture.Default()
+		o.Level = c.level
+		blob, err := kh3.Wrap(fixture.BuildFull(o), key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p := filepath.Join(dir, c.name)
+		if err := os.WriteFile(p, blob, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		saves = append(saves, p)
+	}
+
+	out := filepath.Join(dir, "both.json")
+	var refused error
+	captureStdout(t, func() {
+		refused = cmdDump([]string{saves[0], saves[1], "-account", fixture.Account, "-o", out})
+	})
+	if refused == nil {
+		t.Fatal("dump -o accepted two saves for one file; the first would be lost in silence")
+	}
+	if !strings.Contains(refused.Error(), "single file") {
+		t.Errorf("the refusal does not say what is wrong: %v", refused)
+	}
+	if _, err := os.Stat(out); !os.IsNotExist(err) {
+		t.Error("dump wrote part of the file it refused to write")
+	}
+
+	// One save still works, and that is the whole documented use of -o.
+	captureStdout(t, func() {
+		if err := cmdDump([]string{saves[0], "-account", fixture.Account, "-o", out}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	got, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(got, []byte(`"level": 6`)) {
+		t.Errorf("the dump that landed is not the save that was asked for:\n%s", firstLines(got, 12))
+	}
+}
+
+// firstLines keeps a failure message to a readable size: a dump is thousands
+// of lines and printing all of it buries the assertion that failed.
+func firstLines(b []byte, n int) string {
+	lines := strings.SplitN(string(b), "\n", n+1)
+	if len(lines) > n {
+		lines = lines[:n]
+	}
+	return strings.Join(lines, "\n")
+}
