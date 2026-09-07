@@ -30,13 +30,13 @@ func wrapped(t *testing.T, dir, name string, o fixture.Options) string {
 // The rule the whole program rests on: every write re-reads its own output the
 // way the game will, and refuses to hand back anything that does not survive
 // the trip. It was written out twice, once per front end, and neither copy was
-// ever executed by a test -- the CLI's commit sat at 0% and the GUI reached
+// ever executed by a test: the CLI's commit sat at 0% and the GUI reached
 // its own only through a handler. There is one copy now, and this runs it.
 //
 // For a well-formed plaintext the read-back is a backstop rather than a filter:
 // Seal rebuilds both integrity fields, so the trip holds unless Seal or Open
 // has a bug, which is exactly what it is there to catch. What is reachable from
-// here is the other half of the promise -- that a plaintext which would not
+// here is the other half of the promise: that a plaintext which would not
 // produce a loadable save yields an error and no bytes, whichever of the two
 // checks notices.
 func TestSealCheckedReturnsOnlyASaveThatReadsBack(t *testing.T) {

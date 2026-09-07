@@ -8,8 +8,8 @@ import (
 // Save is a save file that has been read off disk and opened: the plaintext
 // structure, plus everything needed to put it back the way it came.
 //
-// There used to be one of these in each front end -- the CLI's `loaded` and
-// the GUI's `openedSave` -- with a matching pair of read and write functions
+// There used to be one of these in each front end (the CLI's `loaded` and
+// the GUI's `openedSave`) with a matching pair of read and write functions
 // either side. They agreed, but only because somebody kept them agreeing: the
 // self-check below was written out twice, byte for byte, and it is the check
 // standing between an edit and a corrupt save. Two copies of the invariant
@@ -60,8 +60,8 @@ func OpenFile(path, account string) (*Save, error) {
 //
 // Nothing may write a save without going through here. Both integrity fields
 // are rebuilt by Seal, and getting either wrong is what corrupts a save, so
-// the output is re-opened -- which revalidates the CRC and, for a Steam save,
-// the MD5 trailer -- and compared back against what was asked for.
+// the output is re-opened, which revalidates the CRC and, for a Steam save,
+// the MD5 trailer, then compared back against what was asked for.
 func (s *Save) SealChecked(newPlain []byte) ([]byte, error) {
 	blob, err := Seal(newPlain, s.Format, s.Key)
 	if err != nil {

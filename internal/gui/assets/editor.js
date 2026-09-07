@@ -14,8 +14,8 @@
 import { el } from "./ui.js";
 
 // Above this many characters the highlight is dropped and the editor stays
-// plain. Re-tokenising on a debounce is cheap for a normal dump -- a real save
-// is about 30 KB -- but a late-game save with every ability and a full
+// plain. Re-tokenising on a debounce is cheap for a normal dump (a real save
+// is about 30 KB) but a late-game save with every ability and a full
 // inventory can be several hundred, and a keystroke should never wait on it.
 const HIGHLIGHT_LIMIT = 400000;
 

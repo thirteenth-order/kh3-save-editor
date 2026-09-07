@@ -1,8 +1,8 @@
 // The schema-driven half of the editor: it loads the field description the
 // server publishes at /api/schema and turns it into two things, a form and a
 // validator. Neither knows anything about Kingdom Hearts. Everything they show
-// -- which fields exist, what they are called, which table names their ids,
-// what range the format allows -- comes out of that one document, which is the
+// (which fields exist, what they are called, which table names their ids,
+// what range the format allows) comes out of that one document, which is the
 // same description the format tests hold against a dump. Add a field to the
 // save and it appears here; there is no widget to write.
 // Modules are always strict, so there is no "use strict" here. They are
@@ -43,8 +43,8 @@ export function tableName(name, id) {
 
 export function indexLines(text) {
   const at = new Map();
-  // Containers with no key of their own -- the document itself, and any array
-  // element -- push null and contribute no path segment. A dump is objects all
+  // Containers with no key of their own (the document itself, and any array
+  // element) push null and contribute no path segment. A dump is objects all
   // the way down, so this only ever applies to the outermost brace.
   const stack = [];
   const pathOf = function (leaf) {

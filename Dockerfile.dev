@@ -17,7 +17,7 @@
 # on purpose; this one is a workbench, and the hardening flags that make sense
 # for running a save editor make no sense for compiling one.
 #
-# Run it as yourself -- `--user "$(id -u):$(id -g)"` -- or every file it builds
+# Run it as yourself, with `--user "$(id -u):$(id -g)"`, or every file it builds
 # into the mounted repo comes back owned by root. The make targets and the dev
 # service in compose.yaml both do this for you.
 

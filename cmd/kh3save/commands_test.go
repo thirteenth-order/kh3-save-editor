@@ -2,7 +2,7 @@
 // run the command against it, read what it printed and what it wrote.
 //
 // This package sat at 19% with seventeen of its nineteen functions at zero,
-// commit -- the write path -- among them. The cause was structural: every
+// commit (the write path) among them. The cause was structural: every
 // command was one function that parsed flags, walked paths, loaded, printed
 // and wrote, so there was no seam to hold. savePaths and eachSave are that
 // seam, and this is what they were for.
@@ -656,7 +656,7 @@ func TestPatchAppliesAnEditAndRefusesAnImpossibleOne(t *testing.T) {
 
 // info -l reads the regions that are too bulky for the default output. The
 // short fixture stops before the record block, and asking for a best on one is
-// an error rather than a read past the end of the buffer -- so info -l has to
+// an error rather than a read past the end of the buffer, so info -l has to
 // print what is there and stay quiet about what is not.
 func TestInfoLongPrintsWhatTheSaveHoldsAndNoMore(t *testing.T) {
 	dir := t.TempDir()

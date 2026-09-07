@@ -65,7 +65,7 @@ SAVE_DIR="$DOCS_DIR/KINGDOM HEARTS III/Steam/76561190000000000/SaveGames/kh3sv2/
 # A short fixture is 0x20000 bytes, which is a valid save and is what the
 # golden vectors were built on, and it stops long before the record block at
 # the tail. A scene that wants to show the tail asks for `fixture: full` and
-# gets saves the size of a real one -- 9.3 MB each, and still under a second to
+# gets saves the size of a real one: 9.3 MB each, and still under a second to
 # build and zip, so the only reason not to make it the default is that the
 # short one is what the rest of the test suite uses.
 fixture() {
@@ -77,7 +77,7 @@ fixture() {
 
 	# A partial patch document, so the scene can cat it rather than type it.
 	# One key from three different regions, including the record block at the
-	# tail, which only a full-size save reaches -- the json scene asks for one.
+	# tail, which only a full-size save reaches; the json scene asks for one.
 	cat >"$WORK/home/$SAVE_DIR/tweak.json" <<'JSON'
 {
   "header": { "munny": 65535, "map_path": "/Game/Levels/ca/ca_01/ca_01" },
@@ -120,7 +120,7 @@ record() {
 
 	# Preflight. A line wider than the terminal wraps and a scene taller than it
 	# scrolls, and both look like a broken recording rather than a broken
-	# geometry -- by the time it shows up it is a GIF, not an error. So the
+	# geometry: by the time it shows up it is a GIF, not an error. So the
 	# scene runs once with the delays turned off and not attached to a terminal,
 	# where nothing wraps, and its real dimensions are measured.
 	fixture "$kind"
@@ -131,8 +131,8 @@ record() {
 	w=$(printf '%s\n' "$fit" | wc -L)
 	h=$(printf '%s\n' "$fit" | wc -l)
 	echo "    fits ${w}x${h} of ${cols}x${rows}"
-	[ "$w" -le "$cols" ] || echo "    warning: widest line is $w, terminal is $cols -- it will wrap" >&2
-	[ "$h" -lt "$rows" ] || echo "    warning: $h lines in $rows rows -- it will scroll" >&2
+	[ "$w" -le "$cols" ] || echo "    warning: widest line is $w, terminal is $cols; it will wrap" >&2
+	[ "$h" -lt "$rows" ] || echo "    warning: $h lines in $rows rows; it will scroll" >&2
 
 	fixture "$kind"
 

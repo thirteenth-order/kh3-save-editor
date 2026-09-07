@@ -38,7 +38,7 @@ const (
 	//
 	// So 0x28 is a balance and these two are the ledger it comes from. Whether
 	// the game recomputes 0x28 from the pair on load or merely cross-checks it
-	// is not known -- that needs the game -- which is exactly why Patch keeps
+	// is not known (that needs the game), which is exactly why Patch keeps
 	// all three consistent instead of writing 0x28 and hoping.
 	MunnyEarnedOff = 0x840 // u32, munny earned to date
 	MunnySpentOff  = 0x844 // u32, munny spent to date
@@ -93,7 +93,7 @@ const (
 	// before Olympus, and the next spell he gets is Cure in Twilight Town, the
 	// world after. So a save anywhere in Olympus holds exactly these two.
 	//
-	// That rules out an array indexed by family -- Water would sit in slot 3 --
+	// That rules out an array indexed by family, where Water would sit in slot 3,
 	// and leaves a compact list of the spells known, at most one per family.
 	// Whether the order is acquisition order or a fixed menu order cannot be
 	// told from two entries that agree on both, so slots are still reported

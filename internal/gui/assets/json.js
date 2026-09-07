@@ -1,8 +1,8 @@
 // The Document view: the code editor, the scope picker that keeps a whole dump
 // navigable, and the validator's report under it.
 //
-// It is separate from editor.js, which is the editor widget itself -- gutter,
-// highlighting, parse errors -- and knows nothing about saves. This is the
+// It is separate from editor.js, which is the editor widget itself (gutter,
+// highlighting, parse errors) and knows nothing about saves. This is the
 // part that knows a document has sections and that a problem has a path.
 
 import { codeEditor, parseError } from "./editor.js";
@@ -11,7 +11,7 @@ import { copyToClipboard, el, icon, pill, toast } from "./ui.js";
 
 // paintProblems is the validator's report. It mirrors what the server would
 // say, so a mistake shows up while it is being typed rather than after a round
-// trip -- but the server still has the last word, and nothing is written
+// trip, but the server still has the last word, and nothing is written
 // without its dry run agreeing.
 export function paintProblems(bar, problems, jsonView) {
   bar.innerHTML = "";

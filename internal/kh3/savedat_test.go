@@ -12,7 +12,7 @@ import (
 
 // The two int32s KHSave.Lib3 calls Unknown00058 and Unknown0005C are one
 // int64: a UE4 FDateTime, 100-nanosecond ticks since 0001-01-01. The vectors
-// here are synthetic -- a real save's timestamp says when its owner was
+// here are synthetic: a real save's timestamp says when its owner was
 // playing, which is not something this repo carries.
 func TestSavedAtDecodesFDateTimeTicks(t *testing.T) {
 	for _, c := range []struct {

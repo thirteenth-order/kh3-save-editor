@@ -398,7 +398,7 @@ func TestJSONContract(t *testing.T) {
 // concatenated for the two greps below.
 //
 // It is derived from staticFiles rather than listed, because it used to be
-// listed -- twice -- and a new module had to be remembered in three places or
+// listed, twice, and a new module had to be remembered in three places or
 // the grep silently stopped covering it. Reading the allow-list means a module
 // is scanned from the moment it can be served, which is the moment it matters.
 func allPageSource(t *testing.T) []byte {
@@ -614,7 +614,7 @@ func TestEveryImportedModuleIsOnTheAllowList(t *testing.T) {
 
 // A line break inside SVG path data has to fall on whitespace that was already
 // there. It is tempting to wrap a long "d" attribute to keep the sprite
-// readable, and Python's textwrap will happily break on a hyphen -- which in
+// readable, and Python's textwrap will happily break on a hyphen, which in
 // path data is a minus sign, so "-.26-1.29" becomes "-.26-" and "1.29" and the
 // number is destroyed. The browser reports it to a console nobody is watching,
 // draws nothing for that symbol, and everything else still looks fine.
@@ -660,8 +660,8 @@ func tail(s string, n int) string {
 }
 
 // The interface's Legal page and NOTICE.md say the same things to two
-// audiences: one to somebody using the program, one to somebody -- a rights
-// holder, a crawler, a lawyer -- who went looking for the file that is
+// audiences: one to somebody using the program, one to somebody (a rights
+// holder, a crawler, a lawyer) who went looking for the file that is
 // conventionally named. Two copies of a statement like this are worth having
 // only if they cannot drift, and the way they drift is that one gets updated.
 //
@@ -990,7 +990,7 @@ func TestScanResolvesSavesInsideAnArchive(t *testing.T) {
 }
 
 // A port mismatch is refused like any other bad Host, but it is the one case
-// with a boring cause -- a container published on a different port -- so it
+// with a boring cause (a container published on a different port), so it
 // says so rather than leaving the user to guess.
 func TestHostRefusalExplainsAPortMismatch(t *testing.T) {
 	msg := hostRefusal("127.0.0.1:9000", "[::]:8787")
@@ -1259,7 +1259,7 @@ func quote(s string) string {
 }
 
 // The page builds its whole editor out of /api/schema, so a field renamed in
-// Go and not in the script -- or the other way round -- is a panel that
+// Go and not in the script, or the other way round, is a panel that
 // silently renders nothing. Same idea as TestUIReadsOnlyKeysWeSend, for the
 // other payload.
 func TestUIReadsOnlySchemaKeysWeSend(t *testing.T) {

@@ -95,7 +95,7 @@ type Section struct {
 	Requires string `json:"requires,omitempty"`
 
 	// Spoils is the warning to show over a region whose contents say what is
-	// ahead of the player rather than what is behind them -- who they will
+	// ahead of the player rather than what is behind them: who they will
 	// travel with, which worlds there are. Non-empty means an interface should
 	// cover it until asked, and the text is what it should say.
 	//

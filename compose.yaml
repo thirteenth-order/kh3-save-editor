@@ -19,7 +19,7 @@ services:
 
     # Loopback on the host side. Without the 127.0.0.1 prefix Docker publishes
     # on every interface and, on Linux, writes a NAT rule that your firewall
-    # does not see -- which would put a save editor on the local network.
+    # does not see, which would put a save editor on the local network.
     #
     # Both sides are the same port on purpose. The UI checks the Host header,
     # port included, so publishing 9000:8787 arrives claiming a port it is not
@@ -62,7 +62,7 @@ services:
   #   docker compose run --rm cli swap /saves -d Critical
   #
   # Spelled out rather than extending gui, because what matters here is what
-  # is missing -- the port, the network -- and an inherited service makes
+  # is missing (the port, the network) and an inherited service makes
   # absence hard to read.
   cli:
     profiles: [cli]

@@ -1,5 +1,5 @@
-# Deny everything, then name the build inputs. The alternative -- listing what
-# to exclude -- silently ships whatever gets added later, and this repo has a
+# Deny everything, then name the build inputs. The alternative (listing what
+# to exclude) silently ships whatever gets added later, and this repo has a
 # saves/ directory in it.
 *
 

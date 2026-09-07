@@ -43,7 +43,7 @@ type Header struct {
 //
 // Measured, not guessed: decoded this way all five sample saves land on the
 // minute their .bin file was last written, to the millisecond, and every
-// sample reads a whole number of milliseconds -- which is the resolution
+// sample reads a whole number of milliseconds, which is the resolution
 // FDateTime::Now has on Windows. A save that has never been written by the
 // game reads 0, which SavedAt reports as the zero Time rather than year 1.
 const SavedAtOff = 0x58

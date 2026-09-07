@@ -184,8 +184,8 @@ func WriteFile(p string, data []byte, perm fs.FileMode) error {
 	return replaceMember(archive, member, data)
 }
 
-// BackupOf copies whatever file p lives in -- the save itself, or the whole
-// archive when p names a member -- to a timestamped name beside it, and
+// BackupOf copies whatever file p lives in (the save itself, or the whole
+// archive when p names a member) to a timestamped name beside it, and
 // returns that name. Replacing one member rewrites the entire zip, so for an
 // archive the entire zip is what has to be recoverable.
 func BackupOf(p string, now time.Time) (string, error) {
@@ -264,7 +264,7 @@ var archiveWrite sync.Mutex
 
 // replaceMember rewrites the archive with one member's contents replaced.
 // A zip cannot be edited in place, so this streams every other entry across
-// unchanged -- still compressed, never re-encoded -- into a temporary file
+// unchanged (still compressed, never re-encoded) into a temporary file
 // next to the original, then renames it over the top.
 func replaceMember(archive, member string, data []byte) error {
 	archiveWrite.Lock()

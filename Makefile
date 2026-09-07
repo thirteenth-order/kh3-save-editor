@@ -3,7 +3,7 @@
 # Repo is named for search; the binary is kh3save because you have to type it.
 #
 # `make` on its own lists the targets. `make ci` runs exactly what the CI
-# workflow runs, minus the container job -- that one needs Docker, which the
+# workflow runs, minus the container job. That one needs Docker, which the
 # rest of the project does not, so it is `make docker-smoke` on its own.
 
 SHELL      := /bin/sh
@@ -11,7 +11,7 @@ SHELL      := /bin/sh
 
 GO         ?= go
 # Only tools/gen_tables.py is left, and it is stdlib only, so this is a plain
-# interpreter -- no virtualenv anywhere in the build any more.
+# interpreter: no virtualenv anywhere in the build any more.
 PYTHON     ?= python3
 BIN_DIR    := bin
 BIN        := $(BIN_DIR)/kh3save
@@ -99,7 +99,7 @@ DOCKER    ?= docker
 COMPOSE   ?= docker compose
 IMAGE     ?= kh3save:local
 DEV_IMAGE ?= kh3save-dev:local
-# The folder that holds "KINGDOM HEARTS III" -- or that folder itself. Mounting
+# The folder that holds "KINGDOM HEARTS III", or that folder itself. Mounting
 # it whole matters: the account id is a directory name on the way down to the
 # save, so a mount of the data/ directory alone leaves nothing to derive the
 # key from.
@@ -171,7 +171,7 @@ test-race: ## go test under the race detector
 # the real schema and a dump of the fixture. This is the other half of the
 # safety net: a type checker that reads the same files where they sit and finds
 # the undefined name and the misspelled property without needing a DOM to run
-# them in. It emits nothing -- the page stays classic scripts with no build
+# them in. It emits nothing: the page stays classic scripts with no build
 # step, and the binary embeds the assets exactly as written.
 #
 # Both skip when node is not installed, so a machine without it can still run

@@ -19,7 +19,7 @@ export const TOKEN = new URLSearchParams(location.search).get("t") || "";
 
 // Where the server is handing out assets this run, token segment and all.
 // Taking it from import.meta.url rather than rebuilding it out of TOKEN keeps
-// the shape of an asset URL known in one place -- the server -- so a change
+// the shape of an asset URL known in one place, the server, so a change
 // there cannot leave a hand-assembled copy here pointing at a 403.
 export const ASSETS = new URL(".", import.meta.url).href;
 
@@ -126,13 +126,13 @@ export function heading(name, text) {
 // Dismissable is the default rather than something each call opts into: these
 // say the same thing on every repaint, and a notice you have read, understood
 // and cannot silence stops being a notice and becomes furniture. Opting out is
-// for the ones where dismissing would leave the reader with nothing -- pass
+// for the ones where dismissing would leave the reader with nothing: pass
 // { permanent: true } and say why at the call site.
 //
 // The dismissal is remembered under the title, which is what makes it stick
 // across a repaint, and it is forgotten when the page closes. That is
-// deliberate: these describe live conditions -- the game is running, Steam
-// Cloud is on -- and a dismissal that outlived the run would silence a warning
+// deliberate: these describe live conditions (the game is running, Steam
+// Cloud is on) and a dismissal that outlived the run would silence a warning
 // that is still true on the next one, for a reader who has since forgotten it.
 const DISMISSED = new Set();
 
@@ -165,8 +165,8 @@ export function banner(tone, name, title, text, opts) {
 // opened a save to change its difficulty has not asked to be told.
 //
 // So those regions come up covered and the reader uncovers the ones they want.
-// Which regions those are is not decided here -- schema.spoils says, and the
-// warning shown is the schema's own words -- because the dashboard and the
+// Which regions those are is not decided here: schema.spoils says, and the
+// warning shown is the schema's own words, because the dashboard and the
 // schema-driven form both render them and a list kept in either one would go
 // stale the moment a section moved.
 //
@@ -180,8 +180,8 @@ export function banner(tone, name, title, text, opts) {
 const REVEALED = new Set();
 
 // Keys are schema section keys. A region is covered in both the dashboard and
-// the form, and a link that says "party" means both, so the form's variant --
-// keyed by path, because sections nest and two can share a key -- is named
+// the form, and a link that says "party" means both, so the form's variant,
+// keyed by path, because sections nest and two can share a key, is named
 // here rather than in every link.
 export function revealSpoilers(keys) {
   for (const k of keys || []) {

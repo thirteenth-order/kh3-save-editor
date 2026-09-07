@@ -11,8 +11,8 @@ import (
 // A Kingdom Hearts III save is the same structure however it is stored. Only
 // the wrapper around it changes: the PC release puts it inside AES-256-ECB
 // keyed to the owner's SteamID64 and appends an MD5 trailer, and everything
-// else -- a save a console tool has already decrypted, the output of this
-// tool's own decrypt command, a file someone is inspecting by hand -- is the
+// else (a save a console tool has already decrypted, the output of this
+// tool's own decrypt command, a file someone is inspecting by hand) is the
 // structure on its own with nothing around it.
 //
 // Every command works on both. That is the whole point of naming the wrapper

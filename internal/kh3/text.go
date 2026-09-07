@@ -34,7 +34,7 @@ func GetString(p []byte, f StringField) string { return cstr(p[f.Off : f.Off+f.L
 
 // SetString writes a fixed-width field. One byte is always kept for the
 // terminator, so a value that exactly fills the field is refused rather than
-// silently written without one -- the game reads until a NUL, and a field with
+// silently written without one: the game reads until a NUL, and a field with
 // no NUL runs into whatever follows it.
 func SetString(p []byte, f StringField, s string) error {
 	if len(s) >= f.Len {

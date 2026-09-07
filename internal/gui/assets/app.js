@@ -49,8 +49,8 @@ for (const img of marks) img.src = EMBLEM;
 /* ---------------------------------------------------- segmented control -- */
 
 
-// Said in two places -- once over a list where every folder has Cloud on, and
-// once in the header of a save whose folder does -- so it is written once.
+// Said in two places (once over a list where every folder has Cloud on, and
+// once in the header of a save whose folder does), so it is written once.
 const CLOUD_WARNING =
   "Turn Cloud off for the game in its Steam properties before applying, then " +
   "back on once the change has loaded. Otherwise Steam can restore its own " +
@@ -58,8 +58,8 @@ const CLOUD_WARNING =
 
 
 /* ---------------------------------------------------------------- slots -- */
-// A card is navigation. It carries enough to tell one save from another --
-// who, where, how far -- and every control that writes to the file lives in
+// A card is navigation. It carries enough to tell one save from another
+// (who, where, how far), and every control that writes to the file lives in
 // the workspace it opens. The difficulty swap used to sit right here on the
 // front page, which is what made a tool that maps the whole format read as a
 // difficulty switcher with an editor bolted onto the side.
@@ -575,7 +575,7 @@ function paintLibrary() {
   if (!data.dirs || !data.dirs.length) {
     // No third copy of the mark here. The sigil in the masthead and the rose
     // turning behind it are already on screen, and a fresh install lands on
-    // this state -- which is exactly where the page should be saying what to
+    // this state, which is exactly where the page should be saying what to
     // do next, not showing the emblem a third time.
     const blank = el("div", "empty");
     blank.append(el("h3", null, "No saves found yet"),

@@ -128,7 +128,7 @@ func hostAllowed(host, addr string) bool {
 
 // hostRefusal explains a rejected Host when the reason is mundane. The gate
 // compares the port too, so publishing a container on a host port other than
-// the one it listens on is refused -- correctly, and for a reason nobody would
+// the one it listens on is refused, correctly, and for a reason nobody would
 // guess from "bad host".
 func hostRefusal(host, addr string) string {
 	h, p, err := net.SplitHostPort(host)
@@ -578,7 +578,7 @@ func (s *Server) handleDetail(w http.ResponseWriter, r *http.Request) {
 // what each one is called in a dump, what kind of value it holds, which table
 // names its ids and what range the format allows. The page builds its editor
 // out of this rather than carrying a hand-written widget per field, which is
-// what keeps the two from drifting -- and kh3.Describe is the same description
+// what keeps the two from drifting, and kh3.Describe is the same description
 // the format tests hold against a dump.
 //
 // It is static for the life of the process, so it is worth caching: the enum
@@ -802,7 +802,7 @@ func isLoopback(addr string) bool {
 //
 // It answers 127.0.0.1 for either wildcard, deliberately. Go reports a bind to
 // 0.0.0.0 as [::] on a dual-stack host, and such a listener accepts IPv4 all
-// the same, whereas `docker run -p` publishes IPv4 by default -- so printing
+// the same, whereas `docker run -p` publishes IPv4 by default, so printing
 // the v6 form for a v6 wildcard would hand out a URL that does not connect.
 func browsableAddr(addr string) string {
 	h, p, err := net.SplitHostPort(addr)

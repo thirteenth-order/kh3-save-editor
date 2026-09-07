@@ -508,8 +508,8 @@ var storeRange = map[string][2]int64{
 // fits refuses a value the field cannot hold, rather than storing whatever is
 // left of it after the conversion.
 //
-// The setters truncate or clamp, which is right for them -- they take a Go int
-// and must put something in the byte -- but wrong as the answer to a document.
+// The setters truncate or clamp, which is right for them (they take a Go int
+// and must put something in the byte) but wrong as the answer to a document.
 // Without this check Patch accepted 92 out-of-range values the browser
 // validator rejects outright, and wrote something else: header.level 300 stored
 // 44, inventory count 300 stored 255 while the change line said 300, and
@@ -518,7 +518,7 @@ var storeRange = map[string][2]int64{
 // TestPatchRefusesWhatTheSchemaCallsOutOfRange is what holds them together.
 //
 // It checks only where the schema declares a range. A field the schema leaves
-// unbounded -- the enum ids in party, magic, links and shortcuts -- is left
+// unbounded (the enum ids in party, magic, links and shortcuts) is left
 // alone on purpose: refusing one here and not in the browser would break the
 // rule from the other side.
 func fits(kind, where string, v int64) error {
@@ -648,7 +648,7 @@ func reconcileMunny(p []byte, before [3]int64, changes *[]string) error {
 
 // headerMirrors are the fields the format keeps a second copy of. Dump exposes
 // only the first of each pair, so a document can move it and leave the copy
-// behind -- which is the same silent-revert exposure the munny ledger has, and
+// behind, which is the same silent-revert exposure the munny ledger has, and
 // gets the same narrow treatment: the copy is kept equal only when it already
 // was.
 //
@@ -706,7 +706,7 @@ var slotOnlySections = []string{
 
 // refuseSlotOnlyKeys draws the line Dump already draws: for the system file it
 // stops at the difficulty byte. Patch did not, and a document naming a
-// slot-only field did not fail, it *panicked* -- bonus_hp lives at 0xB49C and
+// slot-only field did not fail, it *panicked*: bonus_hp lives at 0xB49C and
 // the system file is about 0x7B20 bytes, so writing it indexed past the buffer.
 // An error naming the field is the whole fix; the document simply does not
 // belong to this file.
@@ -783,8 +783,8 @@ func patchHeader(out []byte, hdr map[string]any) ([]string, error) {
 		}
 		// A read-only field is only an error when the document actually asks
 		// to move it. Rejecting one that still holds its dumped value would
-		// make the obvious workflow -- dump, change one number, patch the whole
-		// document back -- fail on a field nobody touched.
+		// make the obvious workflow (dump, change one number, patch the whole
+		// document back) fail on a field nobody touched.
 		if ReadonlyHeader[key] {
 			if readField(out, f.off, f.kind) != nv {
 				return nil, fmt.Errorf("header.%s is read-only", key)

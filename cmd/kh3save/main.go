@@ -29,7 +29,7 @@ var version = "dev"
 //
 // The release build, the Makefile and the Docker build all stamp the ldflag,
 // so none of them reach the fallback. What does reach it is a bare `go build`,
-// where Go records a pseudo-version off the commit -- v0.0.0-<date>-<sha>, and
+// where Go records a pseudo-version off the commit: v0.0.0-<date>-<sha>, and
 // +dirty for an edited tree. That is longer than "dev" and strictly more
 // useful in a bug report, so it is kept rather than flattened back.
 // "(devel)" is guarded for anyway: it is what Go records when it has no VCS
@@ -70,8 +70,8 @@ folder works too, and so does one save inside it:
 The UI listens on 127.0.0.1 with a fresh random port and a fresh token every
 run. -addr (or $KH3_ADDR) overrides that and is meant for containers only.
 
-A save with no Steam wrapper -- what a console save tool hands back, and what
-decrypt writes -- is read and written by every command above with no account
+A save with no Steam wrapper (what a console save tool hands back, and what
+decrypt writes) is read and written by every command above with no account
 id at all. convert moves a save between the two forms, and -to plain writes
 the length a console slot actually is, which decrypt does not.
 

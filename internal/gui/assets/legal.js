@@ -16,8 +16,8 @@ import { el, heading, icon } from "./ui.js";
 //
 // It is kept in step with NOTICE.md by TestTheLegalPageAndTheNoticeAgree,
 // which fails if a claim appears in one and not the other. Two copies of a
-// statement like this are worth having -- one for a reader, one for a file a
-// crawler and a lawyer both know to look for -- but only if they cannot drift.
+// statement like this are worth having (one for a reader, one for a file a
+// crawler and a lawyer both know to look for) but only if they cannot drift.
 
 const SECTIONS = [
   {
@@ -58,7 +58,7 @@ const SECTIONS = [
     body: [
       "Three icons identify which platform a save folder belongs to: Steam, " +
       "Epic Games and PlayStation. They come from Simple Icons, whose icon " +
-      "files are released under CC0 1.0 -- copyright waived, attribution not " +
+      "files are released under CC0 1.0: copyright waived, attribution not " +
       "required. It is given anyway.",
 
       "The artwork is free to use. The brands are not, which is a separate " +
@@ -77,8 +77,8 @@ const SECTIONS = [
       "PlayStation is a trademark of Sony Interactive Entertainment Inc. All " +
       "other trademarks are the property of their respective owners.",
 
-      "Each is used only to identify the thing it names -- the game a save " +
-      "belongs to, the platform a folder came from -- and never as a badge " +
+      "Each is used only to identify the thing it names (the game a save " +
+      "belongs to, the platform a folder came from) and never as a badge " +
       "on this program.",
     ],
   },

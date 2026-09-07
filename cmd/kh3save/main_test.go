@@ -324,8 +324,8 @@ func firstLines(b []byte, n int) string {
 // that gets updated. Neither may name a command the other does not.
 //
 // The lines are matched on the single space after "kh3save", which is what the
-// command column is padded from, so the no-argument line -- whose first word
-// is prose -- contributes nothing and needs no special case.
+// command column is padded from, so the no-argument line, whose first word
+// is prose, contributes nothing and needs no special case.
 func TestUsageAndTheDispatchTableNameTheSameCommands(t *testing.T) {
 	documented := map[string]bool{}
 	for _, line := range strings.Split(usage, "\n") {

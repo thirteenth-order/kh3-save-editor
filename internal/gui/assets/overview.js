@@ -8,7 +8,7 @@
 // Two rules shape everything below, and both are the same rule this program
 // applies to the format itself: say what is stored, and do not invent what is
 // not. So there are no completion percentages, because nothing in the file
-// carries a denominator for them -- with three exceptions, which are the three
+// carries a denominator for them, with three exceptions, which are the three
 // header fields the schema gives a soft range. Those get a meter, and it is
 // drawn from schema.softMin/schema.softMax rather than from a number typed in
 // here, so a change to the schema moves the meter and cannot leave it stale.

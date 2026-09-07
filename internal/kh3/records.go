@@ -17,7 +17,7 @@ import "encoding/binary"
 //  2. the five attraction bests land on 0x83D94 and end at 0x83DA8, which is
 //     the exact byte where the last live data in the region stops, and the
 //     three that read non-zero are the same three whose *use* counters at
-//     0x696 are non-zero -- across five sample saves, including one with no
+//     0x696 are non-zero, across five sample saves, including one with no
 //     attraction use at all, where all five bests read zero;
 //  3. upstream's PhotoMaxCount, shifted the same 0x1E0, lands on a field
 //     reading 200 in every sample save, which is the album limit the game

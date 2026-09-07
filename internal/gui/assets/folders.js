@@ -96,8 +96,8 @@ export function folderPanel(canBrowse, dirs, remembered, onChanged) {
 
   // Folders could only be forgotten one at a time, and only the ones that were
   // added by hand: the autodetected rows carry no remove button, because they
-  // come straight back on the next scan. So a list that has drifted -- a moved
-  // folder, a backup zip that no longer exists, a path added while testing --
+  // come straight back on the next scan. So a list that has drifted (a moved
+  // folder, a backup zip that no longer exists, a path added while testing)
   // had no way back to a clean slate short of editing the config file. This is
   // that way back. It clears only what the store remembers; the autodetected
   // folders are found again immediately, and nothing near a save is touched.

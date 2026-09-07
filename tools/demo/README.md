@@ -19,8 +19,8 @@ recording anything again.
 
 A Kingdom Hearts III save embeds its owner's SteamID64 and their entire
 playthrough, so a recording may never touch one. Every scene runs against a
-throwaway tree from `tools/genfixture`, keyed to `76561190000000000` -- a
-valid-looking account id that belongs to nobody -- rebuilt from scratch before
+throwaway tree from `tools/genfixture`, keyed to `76561190000000000`, a
+valid-looking account id that belongs to nobody, rebuilt from scratch before
 each scene, because `swap` and `patch` edit what they are given and leave a
 `.bak` behind.
 

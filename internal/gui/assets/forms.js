@@ -227,8 +227,8 @@ function collapsible(ctx, at, title, sub, build, open) {
 }
 
 // under names a child of the current path. Sections nest, and two of them can
-// carry the same key under different parents -- equipment sits inside every
-// character -- so the whole path is the identity and not the last segment.
+// carry the same key under different parents (equipment sits inside every
+// character), so the whole path is the identity and not the last segment.
 function under(ctx, key) {
   return (ctx.at || "") + "/" + key;
 }
@@ -242,7 +242,7 @@ function under(ctx, key) {
 // where the party array, the story flags and all sixteen character structs are
 // laid out in full, so unfolding "Party" to fix a number should not be the way
 // somebody learns who joins in world four. The fold is the outer gate and the
-// cover is the inner one -- the fold's title is a section name and gives
+// cover is the inner one: the fold's title is a section name and gives
 // nothing away, while its contents do.
 function sectionNode(sec, value, ctx) {
   if (sec.requires === "records" && !ctx.caps.records) {

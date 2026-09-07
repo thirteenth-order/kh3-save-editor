@@ -107,7 +107,7 @@ func TestUnknownHeaderKeyIsRejected(t *testing.T) {
 }
 
 // The derived keys a dump carries are still accepted, or the obvious
-// workflow -- dump, change one number, patch the whole thing back -- breaks.
+// workflow (dump, change one number, patch the whole thing back) breaks.
 func TestDerivedHeaderKeysAreStillAccepted(t *testing.T) {
 	p := fixture.Build(fixture.Default())
 	_, changes, err := kh3.Patch(p, []byte(

@@ -13,8 +13,8 @@ import (
 // to refuse exactly the same values, or the two disagree about what is legal
 // and the disagreement is invisible: the setters truncate or clamp, so an
 // out-of-range value is written as something else and reported as though it
-// had been taken. It was 92 fields' worth of exactly that -- header.level 300
-// stored 44, inventory count 300 stored 255 and said 300 -- while jscheck's
+// had been taken. It was 92 fields' worth of exactly that (header.level 300
+// stored 44, inventory count 300 stored 255 and said 300) while jscheck's
 // mirror check asserted in a comment that Patch refused what it refused.
 //
 // This walks the schema rather than listing fields, so a field added with a

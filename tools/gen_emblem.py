@@ -11,13 +11,13 @@ The look is the one the original emblem already had, and it is deliberately
 kept: concentric courses of radiating wedges alternating navy and gold, running
 edge to edge so the colour is a continuous field; a fine gold net of crossing
 arcs laid over an outer band; a solid gold hub ring around a dark centre; a gold
-rim. Stained glass -- broad panes of colour, thin lead over the top.
+rim. Stained glass: broad panes of colour, thin lead over the top.
 
 What was wrong with it
 ----------------------
 Only the setting-out. The pieces were placed by eye, so nothing met anything:
 
-  * The backdrop stacked three symmetries with no common divisor -- eight
+  * The backdrop stacked three symmetries with no common divisor: eight
     filled wedges, sixteen spokes, twelve circles. Half the spokes fell on a
     wedge edge and half bisected a gap.
   * Its lattice circles were sized by eye (r=23.27 on a ring of 58, where
@@ -37,22 +37,22 @@ Wedges. A course of N wedges spans one band edge to edge, boundaries on the N
 mullion rays, so consecutive wedges share an edge and the ring closes with no
 gap and no overlap. Both courses carry the same N on the same rays and the same
 colours, so a gold ray runs unbroken from the hub ring to the net and the mid
-ring reads as a lead crossing it -- which is what the original does. Splitting
+ring reads as a lead crossing it, which is what the original does. Splitting
 the colour at the mid ring instead turns the rays into a checkerboard and loses
 the radiating read entirely; that was tried, and it is worse.
 
 The net. The outer band is woven by arcs struck from the band's own mid-ring --
-the one circle it already has -- each landing on the outer ring `span` mullions
+the one circle it already has, each landing on the outer ring `span` mullions
 away, which forces its radius by the law of cosines:
 
     rho^2 = Rc^2 + Ro^2 - 2*Rc*Ro*cos(span * 2*pi/N)
 
 `span` is the only free number in the whole drawing, and it means one legible
 thing: how far around an arc reaches before the rim. The circles run past the
-band, so they are clipped to it -- what a net shows is the part of itself
+band, so they are clipped to it: what a net shows is the part of itself
 inside its frame.
 
-Everything here is original geometry -- circles, tangency, star polygons and
+Everything here is original geometry: circles, tangency, star polygons and
 radiating wedges are architectural, not game artwork. Nothing from Square Enix
 or Disney is bundled.
 """
@@ -133,8 +133,8 @@ class Course:
         """One wedge: the annular sector between two neighbouring mullions.
 
         `duty` narrows it about its own centre line. The original is navy
-        dominant -- gold runs about a quarter of the circumference inside the
-        mid ring and just under half outside it -- and equal wedges lose that,
+        dominant (gold runs about a quarter of the circumference inside the
+        mid ring and just under half outside it) and equal wedges lose that,
         reading as a gold sunburst instead of blue glass with gold in it.
         """
         pad = self.step * (1 - duty) / 2
@@ -182,7 +182,7 @@ class Net:
     it is shallow arcs that cross to weave the band into curved quadrilaterals.
     Two rules and one integer produce that:
 
-      * the arcs are struck from the band's own mid-ring -- the one circle the
+      * the arcs are struck from the band's own mid-ring, the one circle the
         band already has without choosing anything;
       * each arc lands on the outer ring `span` mullions away, which by the law
         of cosines forces its radius:
@@ -287,7 +287,7 @@ def emblem():
     # of it. That leaves a thin dark edge on both sides of every line, which is
     # what reads as the lead standing proud of the glass. It is two strokes
     # rather than a filter because a filter with one unrecognised primitive can
-    # be dropped -- or in Inkscape's case turn the whole group invisible.
+    # be dropped, or in Inkscape's case turn the whole group invisible.
     o.append(f'<g fill="none" stroke="{SHADOW}" stroke-width="{f(lead + 1.1)}" '
              f'opacity=".55">')
     o.append(f'<g clip-path="url(#e-band)">{net.circles()}</g>')
@@ -301,7 +301,7 @@ def emblem():
     o.append(f'<g clip-path="url(#e-band)">{net.circles()}</g>')
     # The lead follows the panes. Stroking each gold wedge's own outline puts a
     # line down both its sides and across both its ends, which is what leaded
-    # glass looks like -- and it is why the mullions cannot live on the slot
+    # glass looks like, and it is why the mullions cannot live on the slot
     # boundaries once the gold is narrowed off them: they would run through open
     # navy, beside the pane rather than around it.
     o.append(f'<path d="{inner.wedges(1, DUTY_IN)}"/>')
@@ -321,7 +321,7 @@ def emblem():
              f'{inner.circle(r["centre"])}{inner.circle(r["hub"])}</g>')
 
     # Rim: a gold band from R_RIM to the disc edge, seated on a dark line so it
-    # does not float off the glass, and lit on its inner edge only -- lighting
+    # does not float off the glass, and lit on its inner edge only: lighting
     # both made it read as a bright hoop rather than as part of the window.
     rw = R - r["rim"]
     o.append(f'<circle cx="{f(c)}" cy="{f(c)}" r="{f(r["rim"])}" fill="none" '
@@ -339,8 +339,8 @@ def icon():
     """The browser-tab icon: the same drawing, cut down for 16 px.
 
     Twenty-four rays, two courses and a net turn to mud at tab size, so what is
-    dropped is detail, not the drawing: twelve rays -- the emblem's own count
-    halved -- running the whole way from the hub ring to the rim, with the mid
+    dropped is detail, not the drawing: twelve rays, the emblem's own count
+    halved, running the whole way from the hub ring to the rim, with the mid
     ring and the net band left out.
 
     Twelve and not eight. Eight was rendered and looked at: four gold blades
@@ -383,7 +383,7 @@ def rose_symbol():
     """The backdrop, at 11% opacity behind the masthead.
 
     The emblem's setting-out in line, with one faint wedge alternation under it
-    -- the same drawing at two sizes rather than two drawings that nearly agree.
+    (the same drawing at two sizes rather than two drawings that nearly agree).
     It is what the old backdrop was trying to be: it had the wedges, the spokes
     and the circle lattice, just none of them on speaking terms.
     """
@@ -452,7 +452,7 @@ def ring_symbol():
 
 # ------------------------------------------------------------------ write --
 # Each symbol owns the comment above it, so a rewritten drawing can never be
-# left sitting under a description of the drawing it replaced -- which is how
+# left sitting under a description of the drawing it replaced, which is how
 # index.html came to promise twelve petal circles over a lattice of eight.
 ROSE_RE = re.compile(r'    <!--[^>]*?-->\n(?=    <symbol id="rose")'
                      r'|    <symbol id="rose".*?</symbol>', re.S)

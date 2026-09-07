@@ -251,7 +251,7 @@ function ok(name, cond, extra) {
 
   // Sections build their bodies on first open, so opening every one is the
   // only way to run the code that draws it. Opening a fold reveals more, and
-  // a cover inside a fold only exists once that fold is open -- so both are
+  // a cover inside a fold only exists once that fold is open, so both are
   // driven in the same pass rather than one after the other.
   let opened = 0;
   let uncovered = 0;
@@ -397,7 +397,7 @@ function ok(name, cond, extra) {
 
   /* --------------------------------------------------------------- the shell */
   // app.js is the entry point, so importing it is what runs it: it paints the
-  // list of saves on load. Nothing is exported for the sake of this check -- a
+  // list of saves on load. Nothing is exported for the sake of this check: a
   // card is opened by calling the handler the shell put on it, which is what a
   // click does, and that is the whole navigation path.
 
@@ -486,8 +486,8 @@ function ok(name, cond, extra) {
     reads().indexOf("System file") > -1);
 
   /* ---------------------------------------------------------------- the legal page */
-  // It is reachable without a scan on purpose -- it has to be readable when
-  // nothing on this machine can be read at all -- so it is worth checking that
+  // It is reachable without a scan on purpose, because it has to be readable
+  // when nothing on this machine can be read at all, so it is worth checking
   // it builds and that the sentence a rights holder came for is in it.
   const notices = get("legalPage")();
   const said = notices.textContent;

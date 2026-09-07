@@ -9,7 +9,7 @@
     "",
     "The assets are ES modules, so the checker follows the imports. That makes",
     "a name used but never imported an error, and an import nothing uses one",
-    "too -- neither of which was visible back when every file shared a single",
+    "too, neither of which was visible back when every file shared a single",
     "global scope.",
     "",
     "strict is off. These are DOM builders written against a browser, not a",

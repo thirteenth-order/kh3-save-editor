@@ -30,8 +30,8 @@ python tools/gen_emblem.py --check   # fail if a committed asset is stale (CI)
 The look is the original's and is meant to stay that way: navy and gold rays
 radiating from a gold hub ring, a woven net over the outer band, a gold rim.
 What was wrong with it was the setting-out. The backdrop stacked three
-symmetries with no common divisor -- eight wedges, sixteen spokes, twelve
-circles -- with the circles sized by eye so they overlapped and punched through
+symmetries with no common divisor (eight wedges, sixteen spokes, twelve
+circles) with the circles sized by eye so they overlapped and punched through
 the hub while stopping short of the rim; the favicon's comment promised twelve
 wedges and drew six; and the emblem was a 117 KB PNG of a fourth drawing that
 shared no radius with either.
@@ -39,7 +39,7 @@ shared no radius with either.
 Now one set of radii, measured off the original with a radial histogram, feeds
 all three, and the net's arcs are solved rather than placed. The module
 docstring carries the derivations and the calls that were made by rendering and
-comparing rather than by reasoning -- the net's `span`, the favicon's ray count.
+comparing rather than by reasoning: the net's `span`, the favicon's ray count.
 Change a number there and all three marks move together, which is the point.
 
 ## genfixture

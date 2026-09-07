@@ -3,7 +3,7 @@
 # kh3save in a container: a static binary on an empty filesystem.
 #
 # The runtime stage is FROM scratch, so the image contains the binary, two
-# empty directories and a passwd entry -- no shell, no libc, no package
+# empty directories and a passwd entry: no shell, no libc, no package
 # manager, nothing to escalate into. That is the whole hardening argument;
 # the run-time flags in compose.yaml and the README only take away what is
 # left.
@@ -51,7 +51,7 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
 # heard of.
 # The UI finds save folders by globbing the places the game puts them, all of
 # them under $HOME. A container has no such folder, so $HOME/Documents holds a
-# link to the mount point and the existing autodetection walks into it -- which
+# link to the mount point and the existing autodetection walks into it, which
 # is why the UI lists a save the moment it opens, with nothing typed. The name
 # has to be exactly this: it is the folder name the glob looks for. Mounting
 # something that is not a save folder at /saves just leaves the link dangling
@@ -79,7 +79,7 @@ ENV HOME=/home/nonroot \
     KH3_ADDR=0.0.0.0:8787
 
 # Gate 1 of the UI's security model is a loopback bind, and a loopback bind
-# inside a network namespace is reachable from nothing at all -- so the image
+# inside a network namespace is reachable from nothing at all, so the image
 # opts out with KH3_ADDR above, and the container boundary takes over. Publish
 # this port to 127.0.0.1 and no further; the per-run token, the Host check and
 # the Sec-Fetch-Site check all still apply.

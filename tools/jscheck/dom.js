@@ -56,7 +56,7 @@ class Node {
 class Text extends Node {
   constructor(t) { super("#text"); this._text = t; }
 }
-// Nodes the page addresses by id -- #app, #toasts, #modal, #topbar. They are
+// Nodes the page addresses by id: #app, #toasts, #modal, #topbar. They are
 // kept rather than minted per call, because the shell holds on to the one it
 // got at load and paints into it later: a fresh node each time would mean
 // nothing a check could look at afterwards.

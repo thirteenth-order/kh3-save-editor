@@ -326,7 +326,7 @@ h2 svg { width:14px; height:14px; color:var(--brass-lo); }
              pointer-events:none; }
 /* Scoped to .field, which is the icon-and-input pair: the 2.5rem left padding
    is the room the icon sits in. Unscoped, this reached every text input on the
-   page -- the editor's own fields included, which is where it indented every
+   page, the editor's own fields included, which is where it indented every
    value by 40px and set them in the wrong face. */
 .field input[type=text] {
   width:100%; font:13px var(--mono); color:var(--text);
