@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/thirteenth-order/kh3-save-editor/internal/kh3"
@@ -35,7 +36,7 @@ func cmdSchema(args []string) error {
 		for name := range s.Tables {
 			names = append(names, name)
 		}
-		sortStrings(names)
+		slices.Sort(names)
 		for _, name := range names {
 			fmt.Printf("  %-20s %4d ids\n", name, len(s.Tables[name]))
 		}
@@ -157,12 +158,4 @@ func wrap(s string, width int) []string {
 		out = append(out, line)
 	}
 	return out
-}
-
-func sortStrings(s []string) {
-	for i := 1; i < len(s); i++ {
-		for j := i; j > 0 && s[j] < s[j-1]; j-- {
-			s[j], s[j-1] = s[j-1], s[j]
-		}
-	}
 }

@@ -9,6 +9,45 @@ import (
 	"github.com/thirteenth-order/kh3-save-editor/internal/kh3"
 )
 
+// A run is a stretch of bytes where two saves disagree, as a half-open range.
+type run struct{ start, end int }
+
+func (r run) len() int { return r.end - r.start }
+
+// diffRuns finds every stretch where a and b disagree, comparing up to the
+// length of the shorter one.
+//
+// It is separate from the printing because it is the part with an answer that
+// can be checked: a run that starts one byte early or ends one byte late names
+// the wrong offset, and naming offsets is what this command is for.
+func diffRuns(a, b []byte) []run {
+	var runs []run
+	n := min(len(a), len(b))
+	for i := 0; i < n; {
+		if a[i] != b[i] {
+			s := i
+			for i < n && a[i] != b[i] {
+				i++
+			}
+			runs = append(runs, run{s, i})
+		} else {
+			i++
+		}
+	}
+	return runs
+}
+
+// leNumber reads a run as the little-endian integer it would be if it were
+// one, which is what makes a four-byte difference readable as "1177 -> 1895"
+// rather than as two hex blobs.
+func leNumber(b []byte) uint64 {
+	var v uint64
+	for k := len(b) - 1; k >= 0; k-- {
+		v = v<<8 | uint64(b[k])
+	}
+	return v
+}
+
 func cmdDiff(args []string) error {
 	var account string
 	f := fs("diff", &account)
@@ -21,6 +60,9 @@ func cmdDiff(args []string) error {
 	if len(rest) != 2 {
 		return fmt.Errorf("diff needs exactly two files")
 	}
+	// A file that is already plaintext is compared as it lies: diff is what
+	// gets pointed at decrypt's output, and asking for an account id there
+	// would defeat the purpose.
 	asPlain := func(path string) ([]byte, error) {
 		blob, err := kh3.ReadFile(path)
 		if err != nil {
@@ -46,42 +88,25 @@ func cmdDiff(args []string) error {
 	if len(a) != len(b) {
 		fmt.Printf("note: lengths differ (%d vs %d)\n", len(a), len(b))
 	}
-	n := min(len(a), len(b))
-	type run struct{ start, end int }
-	var runs []run
-	for i := 0; i < n; {
-		if a[i] != b[i] {
-			s := i
-			for i < n && a[i] != b[i] {
-				i++
-			}
-			runs = append(runs, run{s, i})
-		} else {
-			i++
-		}
-	}
+
+	runs := diffRuns(a, b)
 	skipped, total := 0, 0
 	for _, r := range runs {
-		total += r.end - r.start
+		total += r.len()
 		if *skipKnown && r.start < 0x10 {
 			skipped++
 			continue
 		}
-		if *maxRun > 0 && r.end-r.start > *maxRun {
+		if *maxRun > 0 && r.len() > *maxRun {
 			skipped++
 			continue
 		}
 		x, y := a[r.start:r.end], b[r.start:r.end]
 		extra := ""
-		if r.end-r.start <= 4 {
-			var xi, yi uint64
-			for k := len(x) - 1; k >= 0; k-- {
-				xi = xi<<8 | uint64(x[k])
-				yi = yi<<8 | uint64(y[k])
-			}
-			extra = fmt.Sprintf("   %d -> %d", xi, yi)
+		if r.len() <= 4 {
+			extra = fmt.Sprintf("   %d -> %d", leNumber(x), leNumber(y))
 		}
-		fmt.Printf("0x%08x +%-4d  %x -> %x%s\n", r.start, r.end-r.start, x, y, extra)
+		fmt.Printf("0x%08x +%-4d  %x -> %x%s\n", r.start, r.len(), x, y, extra)
 	}
 	fmt.Printf("\n%d differing runs (%d bytes)", len(runs), total)
 	if skipped > 0 {
