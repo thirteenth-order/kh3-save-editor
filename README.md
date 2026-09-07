@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/banner.jpg" alt="" width="720">
+<img src="media/banner.jpg" alt="" width="720">
 
 # KH3 Save Editor
 
@@ -19,7 +19,7 @@ no real-time capture.
 [![go version](https://img.shields.io/github/go-mod/go-version/thirteenth-order/kh3-save-editor)](go.mod)
 [![license](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
-<img src="docs/screenshot-saves.png" alt="The kh3save interface listing three save slots, each showing its difficulty, level, playtime, munny, world and map, above a save folder whose account id is masked" width="720">
+<img src="media/screenshot-saves.png" alt="The kh3save interface listing three save slots, each showing its difficulty, level, playtime, munny, world and map, above a save folder whose account id is masked" width="720">
 
 </div>
 
@@ -233,7 +233,7 @@ find-in-page and out of a screenshot as well as out of sight. Uncovering one
 lasts as long as the tab is open; a fresh run starts covered again. The shot
 below has both lifted, because a picture of two covers would not tell you much.
 
-<img src="docs/screenshot-summary.png" alt="The Summary dashboard: panels for where the save is, its numbers as tiles with meters for level and lucky emblems, and a party panel of character sheets showing HP, MP, focus, equipped gear by kind, ability counts and AI behavior" width="720">
+<img src="media/screenshot-summary.png" alt="The Summary dashboard: panels for where the save is, its numbers as tiles with meters for level and lucky emblems, and a party panel of character sheets showing HP, MP, focus, equipped gear by kind, ability counts and AI behavior" width="720">
 
 **Fields** is a form, and it is not hand-written. The program publishes a
 description of every field it can edit -- what each one is called, which table
@@ -244,7 +244,7 @@ with no interface work at all. An equipment slot is the clearest case: the type
 byte selects which of KH3's ten item id spaces the id belongs to, so choosing a
 type re-points the item picker at the table that names ids of that type.
 
-<img src="docs/screenshot-fields.png" alt="The Fields view: collapsible sections for header, party, shortcuts, magic, links, story progress, materials, inventory, keychain upgrades, records and characters, with Sora expanded down to an accessory slot whose type and item are each chosen from a named list" width="720">
+<img src="media/screenshot-fields.png" alt="The Fields view: collapsible sections for header, party, shortcuts, magic, links, story progress, materials, inventory, keychain upgrades, records and characters, with Sora expanded down to an accessory slot whose type and item are each chosen from a named list" width="720">
 
 **Document** is the JSON itself, with line numbers, highlighting, and a
 validator that runs as you type: it marks the line, names the path and says
@@ -255,7 +255,7 @@ scope picker narrows the box to one section or one character, because a whole
 dump is a lot of text to hunt through when the thing being changed is one
 character's abilities.
 
-<img src="docs/screenshot-json.png" alt="The Document view: a JSON editor with line numbers and syntax highlighting, a scope picker set to the whole document, and a validator reporting that the document checks out" width="720">
+<img src="media/screenshot-json.png" alt="The Document view: a JSON editor with line numbers and syntax highlighting, a scope picker set to the whole document, and a validator reporting that the document checks out" width="720">
 
 Nothing is written until the server has agreed: **Preview changes** asks it what
 the document would do and prints the list, and **Apply** shows the same list for
@@ -307,7 +307,7 @@ of, so "what can this actually edit?" has an answer that does not involve
 opening a browser. `-json` gives the whole thing, enum tables included, and
 `-tables` just the tables:
 
-<img src="docs/demo-schema.gif" alt="kh3save schema -tables listing every enum table the save format uses and how many ids each holds, in alphabetical order from Abilities at 512 to Worlds at 22" width="720">
+<img src="media/demo-schema.gif" alt="kh3save schema -tables listing every enum table the save format uses and how many ids each holds, in alphabetical order from Abilities at 512 to Worlds at 22" width="720">
 
 The account id is detected from the save path, and an Epic Games Store save
 needs no id of its own (see [Key derivation](#key-derivation)). Override it
@@ -341,7 +341,7 @@ over `0x10` to *end of file* rather than to `0x10 + filesize`, which agrees
 with the game only when there is no tail. `decrypt` does not trim, because its
 job is to show the plaintext of the file it was given.
 
-<img src="docs/demo-convert.gif" alt="kh3save convert stripping the Steam wrapper off a save, info reporting the result as a plain container with no account id, convert putting the wrapper back on, and cmp finding the result identical to the original byte for byte" width="720">
+<img src="media/demo-convert.gif" alt="kh3save convert stripping the Steam wrapper off a save, info reporting the result as a plain container with no account id, convert putting the wrapper back on, and cmp finding the result identical to the original byte for byte" width="720">
 
 Going back to `pc` is the one direction that needs `-account`: a plain save
 carries no id, and the key is derived from the id alone, so there is nothing
@@ -357,22 +357,22 @@ a README. `tools/demo/README.md` covers how the recordings are made.
 
 `info` reads a folder without touching it:
 
-<img src="docs/demo-info.gif" alt="kh3save info printing the header fields of three save slots: version, difficulty, level, playtime, munny and map" width="720">
+<img src="media/demo-info.gif" alt="kh3save info printing the header fields of three save slots: version, difficulty, level, playtime, munny and map" width="720">
 
 `info -l` adds everything else the format layer knows, down to the record
 block at the tail of the file:
 
-<img src="docs/demo-long.gif" alt="kh3save info -l on one save, listing party, magic, links, shortcuts, synthesis materials, story progress, attraction and shotlock records with their best scores, minigame and Flantastic Seven records, the photo album limit, keychain upgrades, and each character's stats and equipment" width="720">
+<img src="media/demo-long.gif" alt="kh3save info -l on one save, listing party, magic, links, shortcuts, synthesis materials, story progress, attraction and shotlock records with their best scores, minigame and Flantastic Seven records, the photo album limit, keychain upgrades, and each character's stats and equipment" width="720">
 
 `swap` reports exactly the same thing with `-n` as without it. The only
 difference is whether the last two lines happen:
 
-<img src="docs/demo-swap.gif" alt="kh3save swap previewing a Standard to Critical change with -n, then running again without it and writing a timestamped backup" width="720">
+<img src="media/demo-swap.gif" alt="kh3save swap previewing a Standard to Critical change with -n, then running again without it and writing a timestamped backup" width="720">
 
 `verify` checks both integrity fields, which is what a single flipped byte
 anywhere in the file runs into:
 
-<img src="docs/demo-verify.gif" alt="kh3save verify reporting OK for three slots, then FAIL with a trailing MD5 mismatch after a single byte is overwritten" width="720">
+<img src="media/demo-verify.gif" alt="kh3save verify reporting OK for three slots, then FAIL with a trailing MD5 mismatch after a single byte is overwritten" width="720">
 
 ### Backup archives
 
@@ -385,7 +385,7 @@ kh3save info saves/KH3_CRIT.zip                 # every save inside it
 kh3save swap "backup.zip!KINGDOM HEARTS III/Steam/1/SaveGames/kh3sv2/data/KHIII_slot0.bin" -d Proud
 ```
 
-<img src="docs/demo-archive.gif" alt="kh3save info reading three saves straight out of a backup.zip, each addressed as backup.zip! followed by its path inside the archive" width="720">
+<img src="media/demo-archive.gif" alt="kh3save info reading three saves straight out of a backup.zip, each addressed as backup.zip! followed by its path inside the archive" width="720">
 
 A save inside an archive is addressed as `<archive>!<member>`, the way `jar:`
 URLs do it, so the account id is still read from the numeric directory in the
@@ -443,7 +443,7 @@ says which one an id belongs to, so an id on its own is meaningless.
 A whole dump can be fed straight back to `patch` unchanged; it reports no
 changes and writes nothing.
 
-<img src="docs/demo-json.gif" alt="kh3save dump writing a save to JSON, then patch applying a document that touches the header, a character and the record block at the tail, reporting each field it changed by name" width="720">
+<img src="media/demo-json.gif" alt="kh3save dump writing a save to JSON, then patch applying a document that touches the header, a character and the record block at the tail, reporting each field it changed by name" width="720">
 
 Integers accept decimal or `0x` hex. The size, version and checksum fields are
 read-only and moving one is an error, though a document that carries them

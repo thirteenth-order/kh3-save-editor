@@ -5,12 +5,12 @@ Records the terminal GIFs in the README, with
 [agg](https://docs.asciinema.org/manual/agg/).
 
 ```sh
-tools/demo/record.sh              # every scene, into docs/
+tools/demo/record.sh              # every scene, into media/
 tools/demo/record.sh swap verify  # just these two
 make demo                         # the same thing
 ```
 
-Each scene writes `docs/demo-<name>.gif` and leaves the asciicast behind in
+Each scene writes `media/demo-<name>.gif` and leaves the asciicast behind in
 `/tmp/kh3-demo/casts`, which is worth keeping: a cast is a few kilobytes of
 text and can be re-rendered at a different size, theme or font without
 recording anything again.
@@ -92,7 +92,7 @@ All environment variables, all with sensible defaults:
 
 | | |
 | :-- | :-- |
-| `OUT` | where the GIFs go (`docs/`) |
+| `OUT` | where the GIFs go (`media/`) |
 | `WORK` | scratch tree for the binary, fixture and casts (`/tmp/kh3-demo`) |
 | `FONT` | font family list; prefers JetBrains Mono, falls back to DejaVu Sans Mono |
 | `FONT_SIZE` | pixels (16) |

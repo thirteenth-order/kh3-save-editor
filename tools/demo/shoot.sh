@@ -21,7 +21,7 @@
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-OUT=${OUT:-$ROOT/docs}
+OUT=${OUT:-$ROOT/media}
 WORK=${WORK:-/tmp/kh3-shots}
 PORT=${PORT:-18973}
 

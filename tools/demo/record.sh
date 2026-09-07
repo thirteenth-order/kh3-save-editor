@@ -27,7 +27,7 @@ set -eu
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 DEMO=$ROOT/tools/demo
-OUT=${OUT:-$ROOT/docs}
+OUT=${OUT:-$ROOT/media}
 WORK=${WORK:-/tmp/kh3-demo}
 
 # Prefers JetBrains Mono where it is installed, which is also agg's own first
