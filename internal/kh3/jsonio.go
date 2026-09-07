@@ -494,6 +494,45 @@ func asInt(v any) (int64, error) {
 	return 0, fmt.Errorf("cannot read %v as an integer", v)
 }
 
+// storeRange is what each storage kind holds. Every Min/Max schema.go declares
+// is one of these pairs, which is what lets one check here mirror what the
+// browser refuses.
+var storeRange = map[string][2]int64{
+	"u8":  {0, 0xFF},
+	"u16": {0, 0xFFFF},
+	"i16": {-32768, 32767},
+	"u32": {0, 0xFFFFFFFF},
+	"i32": {-2147483648, 2147483647},
+}
+
+// fits refuses a value the field cannot hold, rather than storing whatever is
+// left of it after the conversion.
+//
+// The setters truncate or clamp, which is right for them -- they take a Go int
+// and must put something in the byte -- but wrong as the answer to a document.
+// Without this check Patch accepted 92 out-of-range values the browser
+// validator rejects outright, and wrote something else: header.level 300 stored
+// 44, inventory count 300 stored 255 while the change line said 300, and
+// inventory count -5 stored 251. The two halves are supposed to agree in both
+// directions, so this is the Go half of that and
+// TestPatchRefusesWhatTheSchemaCallsOutOfRange is what holds them together.
+//
+// It checks only where the schema declares a range. A field the schema leaves
+// unbounded -- the enum ids in party, magic, links and shortcuts -- is left
+// alone on purpose: refusing one here and not in the browser would break the
+// rule from the other side.
+func fits(kind, where string, v int64) error {
+	r, ok := storeRange[kind]
+	if !ok {
+		return fmt.Errorf("%s: no storage range for kind %q", where, kind)
+	}
+	if v < r[0] || v > r[1] {
+		return fmt.Errorf("%s: %d is outside %d to %d, which is what the field holds",
+			where, v, r[0], r[1])
+	}
+	return nil
+}
+
 // The munny ledger is three fields holding two numbers' worth of information:
 // munny_earned - munny_spent == munny. A document that moves one of them and
 // leaves the others at their dumped values has asked for something arithmetic,
@@ -764,6 +803,9 @@ func Patch(plain, doc []byte) ([]byte, []string, error) {
 				}
 				continue
 			}
+			if err := fits(f.kind, "header."+key, nv); err != nil {
+				return nil, nil, err
+			}
 			old := readField(out, f.off, f.kind)
 			writeField(out, f.off, f.kind, nv)
 			if old != nv {
@@ -854,6 +896,9 @@ func Patch(plain, doc []byte) ([]byte, []string, error) {
 				if err != nil {
 					return nil, nil, fmt.Errorf("characters.%s.%s: %w", cname, key, err)
 				}
+				if err := fits(st.kind, fmt.Sprintf("characters.%s.%s", cname, key), nv); err != nil {
+					return nil, nil, err
+				}
 				off := charOffset(ci) + st.off
 				old := readField(out, off, st.kind)
 				writeField(out, off, st.kind, nv)
@@ -892,15 +937,27 @@ func Patch(plain, doc []byte) ([]byte, []string, error) {
 					return nil, nil, err
 				}
 			}
+			where := fmt.Sprintf("inventory.%d", id)
+			if err := fits("u8", where+".count", count); err != nil {
+				return nil, nil, err
+			}
+			if err := fits("u8", where+".flags", flags); err != nil {
+				return nil, nil, err
+			}
 			oldC, oldF := GetItem(out, id)
 			if count == 0 {
 				flags = 0
 			}
 			SetItem(out, id, int(count), byte(flags))
 			newC, newF := GetItem(out, id)
+			// Report what the save holds, not what the document asked for.
+			// These two used to disagree: the comparison read the stored value
+			// and the message printed the requested one, so a clamped count
+			// was announced as though it had been written. materials and
+			// keychain_upgrades below have always reported the stored value.
 			if oldC != newC || oldF != newF {
 				changes = append(changes, fmt.Sprintf("inventory %d %s: x%d -> x%d",
-					id, ItemName(id), oldC, count))
+					id, ItemName(id), oldC, newC))
 			}
 		}
 	}
@@ -1023,6 +1080,9 @@ var patchSections = []struct {
 			if err != nil {
 				return nil, fmt.Errorf("story_flags.%d: %w", id, err)
 			}
+			if err := fits("i32", fmt.Sprintf("story_flags.%d", id), v); err != nil {
+				return nil, err
+			}
 			old := GetStoryFlag(out, id)
 			SetStoryFlag(out, id, int32(v))
 			if old != int32(v) {
@@ -1043,6 +1103,9 @@ var patchSections = []struct {
 			if err != nil {
 				return nil, fmt.Errorf("materials.%d: %w", id, err)
 			}
+			if err := fits("u16", fmt.Sprintf("materials.%d", id), v); err != nil {
+				return nil, err
+			}
 			old := GetMaterial(out, id)
 			SetMaterial(out, id, int(v))
 			if now := GetMaterial(out, id); old != now {
@@ -1062,6 +1125,9 @@ var patchSections = []struct {
 			v, err := scalar(m[strconv.Itoa(i)], "value")
 			if err != nil {
 				return nil, fmt.Errorf("keychain_upgrades.%d: %w", i, err)
+			}
+			if err := fits("u8", fmt.Sprintf("keychain_upgrades.%d", i), v); err != nil {
+				return nil, err
 			}
 			old := GetKeychainUpgrade(out, i)
 			SetKeychainUpgrade(out, i, int(v))
@@ -1122,9 +1188,13 @@ func patchAI(out []byte, ci int, cname string, raw any) ([]string, error) {
 		f.set(&a, int(n))
 	}
 	if v, ok := m["recovery_targets"]; ok {
+		where := fmt.Sprintf("characters.%s.ai.recovery_targets", cname)
 		n, err := asInt(v)
 		if err != nil {
-			return nil, fmt.Errorf("characters.%s.ai.recovery_targets: %w", cname, err)
+			return nil, fmt.Errorf("%s: %w", where, err)
+		}
+		if err := fits("u8", where, n); err != nil {
+			return nil, err
 		}
 		a.RecoveryTargets = int(n)
 	}
@@ -1300,13 +1370,16 @@ func patchRecords(out []byte, m map[string]any) ([]string, error) {
 		setUse  func([]byte, int, int)
 		getBest func([]byte, int) int
 		setBest func([]byte, int, int)
+		// bestKind is the width the best is stored at, and the two rows differ:
+		// an attraction best is an i32 and a shotlock best an i16.
+		bestKind string
 	}{
 		{"attractions", AttractionUseOff, AttractionUseCount, RecordAttractions,
 			GetAttractionUse, SetAttractionUse,
 			func(p []byte, i int) int { return int(GetAttractionHigh(p, i)) },
-			func(p []byte, i, v int) { SetAttractionHigh(p, i, int32(v)) }},
+			func(p []byte, i, v int) { SetAttractionHigh(p, i, int32(v)) }, "i32"},
 		{"shotlocks", ShotlockUseOff, ShotlockUseCount, RecordShotlocks,
-			GetShotlockUse, SetShotlockUse, GetShotlockHigh, SetShotlockHigh},
+			GetShotlockUse, SetShotlockUse, GetShotlockHigh, SetShotlockHigh, "i16"},
 	} {
 		raw, ok := m[r.key]
 		if !ok {
@@ -1333,6 +1406,9 @@ func patchRecords(out []byte, m map[string]any) ([]string, error) {
 				if err != nil {
 					return nil, fmt.Errorf("%s.uses: %w", where, err)
 				}
+				if err := fits("u16", where+".uses", n); err != nil {
+					return nil, err
+				}
 				old := r.getUse(out, id)
 				r.setUse(out, id, int(n))
 				if now := r.getUse(out, id); old != now {
@@ -1347,6 +1423,9 @@ func patchRecords(out []byte, m map[string]any) ([]string, error) {
 				n, err := asInt(v)
 				if err != nil {
 					return nil, fmt.Errorf("%s.high_score: %w", where, err)
+				}
+				if err := fits(r.bestKind, where+".high_score", n); err != nil {
+					return nil, err
 				}
 				old := r.getBest(out, id)
 				r.setBest(out, id, int(n))
@@ -1374,6 +1453,9 @@ func patchRecords(out []byte, m map[string]any) ([]string, error) {
 			n, err := scalar(sub[key], "value")
 			if err != nil {
 				return nil, fmt.Errorf("records.minigames.%s: %w", key, err)
+			}
+			if err := fits("i32", "records.minigames."+key, n); err != nil {
+				return nil, err
 			}
 			old := GetRecordScore(out, i)
 			SetRecordScore(out, i, int32(n))
@@ -1418,6 +1500,9 @@ func patchRecords(out []byte, m map[string]any) ([]string, error) {
 				if err != nil {
 					return nil, fmt.Errorf("records.flans.%s.%s: %w", key, fld.key, err)
 				}
+				if err := fits("i32", fmt.Sprintf("records.flans.%s.%s", key, fld.key), n); err != nil {
+					return nil, err
+				}
 				fld.set(&f, int32(n))
 			}
 			SetFlan(out, i, f)
@@ -1444,6 +1529,9 @@ func patchRecords(out []byte, m map[string]any) ([]string, error) {
 			n, err := asInt(sub[key])
 			if err != nil {
 				return nil, fmt.Errorf("records.album.%s: %w", key, err)
+			}
+			if err := fits("i32", "records.album."+key, n); err != nil {
+				return nil, err
 			}
 			old := GetPhotoMaxCount(out)
 			SetPhotoMaxCount(out, int32(n))
