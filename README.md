@@ -6,8 +6,8 @@
 
 **Read and edit a Kingdom Hearts III save, offline.** Everything the format
 holds: stats, equipment, party, abilities, inventory, synthesis materials,
-magic, shortcuts, story progress, minigame records, and the difficulty --
-changed mid-playthrough, with the side effects it actually has. Every field is
+magic, shortcuts, story progress, minigame records, and the difficulty,
+changed mid-playthrough with the side effects it actually has. Every field is
 named, ranged and pickable from the real game tables, in the browser or from
 the command line. Reversible and checksummed. No running game, no memory hooks,
 no real-time capture.
@@ -108,7 +108,7 @@ nothing beyond the `golang` image itself.
 `compose.yaml` sets all of them, plus a tmpfs for the interface's folder list
 so it never lands on disk. `make docker-cli ARGS="verify /saves"` runs a single
 command in the networkless variant, and `tools/docker-smoke.sh` drives the
-whole thing against a synthetic save -- CI runs it on every push.
+whole thing against a synthetic save. CI runs it on every push.
 
 Two things behave differently in a container. The interface cannot open a
 folder picker, so it offers a text field instead; the mounted folder is
@@ -126,8 +126,8 @@ Outside a container the interface binds `127.0.0.1` on a random port, which is
 the first of the four gates described in `internal/gui/server.go`. Loopback
 inside a network namespace is reachable from nothing at all, so the image
 opts out of that one gate with `$KH3_ADDR` and lets the container boundary
-stand in for it. The other three -- a fresh token per run, a Host check, and
-the `Sec-Fetch-Site` check -- apply exactly as they always do, and the smoke
+stand in for it. The other three (a fresh token per run, a Host check, and
+the `Sec-Fetch-Site` check) apply exactly as they always do, and the smoke
 test asserts each of them through a published port.
 
 So publish it to loopback, and nowhere else:
@@ -168,7 +168,7 @@ It is not part of the change because the sample saves cannot say whether it
 means "the current difficulty is below Critical", which `swap` should write, or
 "this playthrough has been below Critical", which `swap` would be fabricating.
 Leaving it costs nothing: a save swapped without it loads, plays and re-saves,
-and the game writes the byte itself. That is not a guess -- it is where two of
+and the game writes the byte itself. That is not a guess: it is where two of
 the sample saves came from.
 
 | | Beginner | Standard | Proud | Critical |
@@ -203,7 +203,7 @@ alone, because removing it would desync the save from the gear still equipped.
 
 Running the binary with no arguments opens it. It finds your saves and lists
 them; picking one opens its workspace. The workspace leads with what the save
-*is* -- difficulty, level, playtime, where it left off -- and changing the
+*is* (difficulty, level, playtime, where it left off), and changing the
 difficulty is one action in its header rather than the front page.
 
 The editor is three views over one document, and all three write through
@@ -218,7 +218,7 @@ has got.
 
 It has no completion percentages, and that is deliberate. The only two meters
 are level and lucky emblems, because those are the only fields the format
-carries a real limit for -- 99 and 90 -- and both are read from the published
+carries a real limit for (99 and 90), and both are read from the published
 schema rather than written into the page. Story progress counts how far a world
 got and nothing in the file says how far it goes, so it is printed and not
 drawn as a bar. Where a number's offset is upstream's word rather than
@@ -236,8 +236,8 @@ below has both lifted, because a picture of two covers would not tell you much.
 <img src="media/screenshot-summary.png" alt="The Summary dashboard: panels for where the save is, its numbers as tiles with meters for level and lucky emblems, and a party panel of character sheets showing HP, MP, focus, equipped gear by kind, ability counts and AI behavior" width="720">
 
 **Fields** is a form, and it is not hand-written. The program publishes a
-description of every field it can edit -- what each one is called, which table
-names its ids, what range the format allows, and where it is stored -- and the
+description of every field it can edit (what each one is called, which table
+names its ids, what range the format allows, and where it is stored), and the
 page builds itself out of that. So every choice is a picker over the real game
 table rather than a number box, and a field added to the format shows up here
 with no interface work at all. An equipment slot is the clearest case: the type
@@ -272,7 +272,7 @@ comes back to it rather than to the list:
 ```
 
 That is also how the screenshots above are taken, which is why they are
-reproducible rather than shot by hand -- `tools/demo/shoot.sh`.
+reproducible rather than shot by hand: `tools/demo/shoot.sh`.
 
 ## Command line
 
@@ -316,8 +316,8 @@ with `-account` or `$KH3_ACCOUNT`. In-place edits are always backed up first.
 ### Saves that are not Steam-encrypted
 
 The save structure is the same however it is stored; only the PC wrapper is
-Steam-specific. A save with no wrapper -- what a console save tool hands back
-once it has opened its own container, and what `decrypt` writes -- is read and
+Steam-specific. A save with no wrapper (what a console save tool hands back
+once it has opened its own container, and what `decrypt` writes) is read and
 written by every command above **with no account id at all**, because there is
 no key involved. `info` says which form it found.
 
@@ -456,7 +456,7 @@ rather than letting a document half-move them. `munny` is a balance:
 field you left alone, and naming all three with numbers that contradict each
 other is an error. `enemies_defeated` and `save_icon` are each stored twice, and
 the second copy follows the first. Every correction is listed among the reported
-changes, and none of it happens on a save whose numbers already disagreed --
+changes, and none of it happens on a save whose numbers already disagreed:
 `patch` keeps a relationship that held from breaking, and never invents a value
 to repair one that was already broken.
 
@@ -518,7 +518,7 @@ It is `0x1E0` later, and three independent facts say so:
 1. The two file-size fields differ by exactly `0x1E0`, so everything past
    whatever was inserted moves by that much.
 2. Shifted by `0x1E0`, the five attraction bests land on `0x83D94` and end at
-   `0x83DA8` -- the exact byte where the last live data in that region stops.
+   `0x83DA8`, the exact byte where the last live data in that region stops.
    The three that read non-zero are the same three whose *use* counters at
    `0x696` are non-zero, across five sample saves including one that has used
    no attraction at all, where all five bests read zero.
@@ -628,9 +628,9 @@ Per character, from `0x1880 + n * 0x9C0`:
 | +0x984 / +0x988 / +0x98C | current HP / MP / Focus |
 
 An equipment slot is `{ id, item type, _, _, enabled, _, _, _ }`. The id means
-nothing on its own: KH3 keeps about ten separate id spaces -- keyblades,
-armor, accessories, consumables, snacks, synthesis items, key items and so on
--- and the type byte selects which one to read the id against. The four arrays
+nothing on its own: KH3 keeps about ten separate id spaces (keyblades,
+armor, accessories, consumables, snacks, synthesis items, key items and so
+on), and the type byte selects which one to read the id against. The four arrays
 are contiguous from +0x80 to +0x158 with no gap between them, so an off-by-one
 in any offset or slot count writes silently into the next array.
 
@@ -680,7 +680,7 @@ make ci            # exactly what the pipeline runs
 make docker-smoke  # build the image and drive it end to end
 ```
 
-`make ci` needs Go, plus a Python 3 for `tables-check` -- the one Python left
+`make ci` needs Go, plus a Python 3 for `tables-check`. The one Python left
 in the tree is `tools/gen_tables.py`, and it is stdlib only. `make docker-smoke`
 is the one target that needs Docker, which is why it is not part of `ci`.
 
@@ -695,7 +695,7 @@ not try to be one. `make typecheck` reads the same files with TypeScript's
 
 Neither one changes what ships. The page is plain ES modules the browser loads
 as written, the binary embeds those exact bytes, and there is no bundler and no
-build step anywhere in the release path -- `go build` on a clean checkout is
+build step anywhere in the release path: `go build` on a clean checkout is
 still the whole story. TypeScript is a dev-only dependency, pinned, and emits
 nothing.
 
@@ -709,8 +709,8 @@ belongs to nobody, because an image renders text that no grep will ever find.
 ### Building without installing a toolchain
 
 If you would rather not install a Go toolchain to compile a save editor,
-`Dockerfile.dev` is one, already configured -- Go, a C compiler for the race
-detector, and the Python 3 that `tables-check` wants:
+`Dockerfile.dev` is one, already configured with Go, a C compiler for the
+race detector, and the Python 3 that `tables-check` wants:
 
 ```sh
 make docker-dev                      # a shell where everything works
@@ -720,7 +720,7 @@ make docker-dev ARGS="make dist"     # binaries for every platform, in dist/
 
 The repo is mounted rather than copied, so you edit files on your own machine
 with your own editor, and `bin/` and `dist/` appear there when the build
-finishes -- owned by you, not by root, which is what `make` is filling in when
+finishes, owned by you and not by root, which is what `make` is filling in when
 it passes your uid. Nothing is installed on the host and nothing outside the
 repo is written to; `make docker-clean` removes the images and the build cache.
 
@@ -764,14 +764,14 @@ source.
 ## What is and is not in this program
 
 **No artwork, image, texture, model, audio, music, video, font or dialogue from
-KINGDOM HEARTS -- or from any other Square Enix or Disney property -- is
+KINGDOM HEARTS, or from any other Square Enix or Disney property, is
 bundled with this program, distributed with it, or displayed by it.** Every
 mark and ornament in the interface is original geometry drawn for this project,
 with exactly three exceptions: the Steam, Epic Games and PlayStation icons that
 say which platform a save folder came from, which are [Simple Icons][si] files
 under [CC0 1.0][cc0].
 
-The program does show short names -- "Potion", "Kingdom Key", "Olympus". Those
+The program does show short names: "Potion", "Kingdom Key", "Olympus". Those
 are labels for numbers in your own save file, generated at build time from
 public enum lists, and used to say which value is which. Without them an editor
 could only offer you the number, and you would have no way to tell a keyblade
@@ -839,7 +839,7 @@ carry, and it is not designed to defeat DRM or enable piracy.
 Your account id and the key derived from it both identify your Steam account,
 so the tool does not print either one unless you ask (`-with-account`,
 `-show-key`). Because Steam names your save directory after the id, every path
-the tool prints is masked the same way -- `765611*******0000` -- so the line
+the tool prints is masked the same way (`765611*******0000`), so the line
 above the account field cannot spell out what the field is hiding. The
 interface masks it too.
 
