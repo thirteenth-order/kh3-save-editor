@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/thirteenth-order/kh3-save-editor/internal/gui"
 	"github.com/thirteenth-order/kh3-save-editor/internal/kh3"
@@ -205,15 +204,6 @@ func expand(paths []string) ([]string, error) {
 	return out, nil
 }
 
-type loaded struct {
-	path    string
-	blob    []byte
-	account string
-	key     []byte
-	plain   []byte
-	format  kh3.Format
-}
-
 // show masks any account id inside a path before a human reads it.
 //
 // On Steam the save lives under a directory named after the SteamID64, so
@@ -227,68 +217,50 @@ type loaded struct {
 // screenshot or a pasted bug report.
 func show(p string) string { return kh3.MaskPath(p) }
 
-func load(path, account string) (*loaded, error) {
-	blob, err := kh3.ReadFile(path)
+// load opens a save, adding the one thing the shared reader has no opinion
+// about: -account on a file that has no account.
+func load(path, account string) (*kh3.Save, error) {
+	l, err := kh3.OpenFile(path, account)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s: %w", show(path), err)
 	}
-	// A save with no Steam wrapper carries no account id and needs no key, so
-	// none of the account plumbing runs for one.
-	format := kh3.DetectFormat(blob)
-	var acct string
-	var key []byte
-	if format.NeedsKey() {
-		if acct, key, err = kh3.ResolveAccount(path, blob, account); err != nil {
-			return nil, err
-		}
-	} else if account != "" {
+	if !l.Format.NeedsKey() && account != "" {
 		return nil, fmt.Errorf("%s is not encrypted, so -account means nothing here; "+
 			"use `kh3save convert -to pc -account %s` to give it one",
 			show(path), account)
 	}
-	plain, _, err := kh3.Open(blob, key)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", show(path), err)
-	}
-	return &loaded{path, blob, acct, key, plain, format}, nil
+	return l, nil
 }
 
-// commit seals, re-reads its own output as the game would, then writes.
-func commit(l *loaded, newPlain []byte, outDir string, dry bool) error {
-	blob, err := kh3.Seal(newPlain, l.format, l.key)
-	if err != nil {
-		return err
-	}
-	check, _, err := kh3.Open(blob, l.key) // revalidates every integrity field
-	if err != nil {
-		return fmt.Errorf("refusing to write %s: %w", show(l.path), err)
-	}
-	// Wrap rewrites the CRC at 0x0C, so compare around it.
-	if string(check[:0x0C]) != string(newPlain[:0x0C]) ||
-		string(check[0x10:]) != string(newPlain[0x10:]) {
-		return fmt.Errorf("refusing to write %s: self-check failed", show(l.path))
-	}
+// commit writes an edited save, or says what it would have written. The seal,
+// the self-check and the backup are kh3.Save.Commit's; what is here is the
+// reporting around them.
+func commit(l *kh3.Save, newPlain []byte, outDir string, dry bool) error {
 	if dry {
+		// Still seal and read it back: the point of -n is to find out whether
+		// this edit produces a save, and skipping the check would answer a
+		// different question.
+		if _, err := l.SealChecked(newPlain); err != nil {
+			return fmt.Errorf("refusing to write %s: %w", show(l.Path), err)
+		}
 		fmt.Println("  (dry run, nothing written)")
 		return nil
 	}
-	dst := l.path
+	dst := l.Path
 	if outDir != "" {
 		if err := os.MkdirAll(outDir, 0o755); err != nil {
 			return err
 		}
-		dst = filepath.Join(outDir, kh3.Base(l.path))
-	} else {
+		dst = filepath.Join(outDir, kh3.Base(l.Path))
+	}
+	backup, err := l.Commit(newPlain, dst)
+	if backup != "" {
 		// Replacing one member rewrites the whole zip, so for a save inside an
 		// archive the backup is of the archive, and says so.
-		b, err := kh3.BackupOf(l.path, time.Now())
-		if err != nil {
-			return err
-		}
-		fmt.Println("  backup ->", show(b))
+		fmt.Println("  backup ->", show(backup))
 	}
-	if err := kh3.WriteFile(dst, blob, 0o644); err != nil {
-		return err
+	if err != nil {
+		return fmt.Errorf("refusing to write %s: %w", show(l.Path), err)
 	}
 	fmt.Println("  wrote", show(dst))
 	return nil
@@ -340,20 +312,20 @@ func cmdInfo(args []string) error {
 		if err != nil {
 			return err
 		}
-		h := kh3.ReadHeader(l.plain)
+		h := kh3.ReadHeader(l.Plain)
 		fmt.Printf("\n%s\n", show(p))
-		if l.format == kh3.FormatPlain {
+		if l.Format == kh3.FormatPlain {
 			fmt.Println("  container    plain (no Steam wrapper, no account id)")
 		}
 		if *withAccount {
-			fmt.Printf("  account      %s\n", l.account)
+			fmt.Printf("  account      %s\n", l.Account)
 		}
 		if *showKey {
-			fmt.Printf("  key          %q\n", l.key)
+			fmt.Printf("  key          %q\n", l.Key)
 		}
 		fmt.Printf("  version      %d.%d   filesize 0x%X   plaintext %d bytes\n",
-			h.VersionMajor, h.VersionMinor, h.FileSize, len(l.plain))
-		if !kh3.IsSlot(l.plain) {
+			h.VersionMajor, h.VersionMinor, h.FileSize, len(l.Plain))
+		if !kh3.IsSlot(l.Plain) {
 			fmt.Println("  (system/config file, no per-playthrough fields)")
 			continue
 		}
@@ -364,7 +336,7 @@ func cmdInfo(args []string) error {
 		fmt.Printf("  world        %s\n", kh3.WorldName(int(h.WorldLogo)))
 		fmt.Printf("  location     %d (%s)\n", h.Location, kh3.LocationName(int(h.Location)))
 		fmt.Printf("  saves %d   enemies defeated %d   crabs %d\n",
-			h.SavesCount, h.EnemiesDefeated, kh3.GetCrabs(l.plain))
+			h.SavesCount, h.EnemiesDefeated, kh3.GetCrabs(l.Plain))
 		// Same opt-in as the account: a wall-clock write time says when
 		// somebody was playing, and this output gets pasted into bug reports.
 		if t := h.SavedAtString(); t != "" && *withAccount {
@@ -374,7 +346,7 @@ func cmdInfo(args []string) error {
 			h.BonusHP, h.BonusMP, h.BonusStrength, h.BonusMagic, h.BonusDefense)
 		fmt.Printf("  map          %s  @ %s\n", h.MapPath, h.MapSpawn)
 		if *long {
-			printLong(l.plain)
+			printLong(l.Plain)
 		}
 	}
 	return nil
@@ -629,18 +601,18 @@ func cmdSwap(args []string) error {
 		if err != nil {
 			return err
 		}
-		if !kh3.IsSlot(l.plain) {
+		if !kh3.IsSlot(l.Plain) {
 			fmt.Printf("skip  %s  (system file, no difficulty field)\n", show(p))
 			continue
 		}
 		// Already on the target difficulty is usually nothing to do, but the
 		// start-item flags can still have work: a Critical save missing the
 		// earring it should have started with.
-		if kh3.GetDifficulty(l.plain) == target && !opt.GrantStartItems {
+		if kh3.GetDifficulty(l.Plain) == target && !opt.GrantStartItems {
 			fmt.Printf("skip  %s  already %s\n", show(p), kh3.Difficulties[target])
 			continue
 		}
-		newPlain, changes, err := kh3.SwapDifficulty(l.plain, target, opt)
+		newPlain, changes, err := kh3.SwapDifficulty(l.Plain, target, opt)
 		if err != nil {
 			return err
 		}
@@ -680,10 +652,10 @@ func cmdAbilities(args []string) error {
 		if err != nil {
 			return err
 		}
-		if !kh3.IsSlot(l.plain) {
+		if !kh3.IsSlot(l.Plain) {
 			continue
 		}
-		fmt.Printf("\n%s   difficulty %s\n", show(p), kh3.Difficulties[kh3.GetDifficulty(l.plain)])
+		fmt.Printf("\n%s   difficulty %s\n", show(p), kh3.Difficulties[kh3.GetDifficulty(l.Plain)])
 		n := 3
 		if *all {
 			n = len(kh3.CharNames)
@@ -691,7 +663,7 @@ func cmdAbilities(args []string) error {
 		for ci := 0; ci < n; ci++ {
 			var owned [][2]int
 			for aid := 0; aid < kh3.AbilityCount; aid++ {
-				if w := kh3.GetAbility(l.plain, ci, aid); w != kh3.AbilityAbsent {
+				if w := kh3.GetAbility(l.Plain, ci, aid); w != kh3.AbilityAbsent {
 					owned = append(owned, [2]int{aid, int(w)})
 				}
 			}
@@ -699,8 +671,8 @@ func cmdAbilities(args []string) error {
 				continue
 			}
 			fmt.Printf("  %-12s current HP %d  MP %d   (%d abilities)\n",
-				kh3.CharNames[ci], kh3.GetStat(l.plain, ci, kh3.StatHP),
-				kh3.GetStat(l.plain, ci, kh3.StatMP), len(owned))
+				kh3.CharNames[ci], kh3.GetStat(l.Plain, ci, kh3.StatHP),
+				kh3.GetStat(l.Plain, ci, kh3.StatMP), len(owned))
 			for _, e := range owned {
 				mark := ""
 				for _, c := range kh3.CriticalAbilities {
@@ -738,13 +710,13 @@ func cmdDecrypt(args []string) error {
 			return err
 		}
 		dst := filepath.Join(outDir, kh3.Base(p))
-		if err := os.WriteFile(dst, l.plain, 0o644); err != nil {
+		if err := os.WriteFile(dst, l.Plain, 0o644); err != nil {
 			return err
 		}
 		if *withAccount {
-			fmt.Printf("%s  ->  %s  (%d bytes, account %s)\n", show(p), show(dst), len(l.plain), l.account)
+			fmt.Printf("%s  ->  %s  (%d bytes, account %s)\n", show(p), show(dst), len(l.Plain), l.Account)
 		} else {
-			fmt.Printf("%s  ->  %s  (%d bytes)\n", show(p), show(dst), len(l.plain))
+			fmt.Printf("%s  ->  %s  (%d bytes)\n", show(p), show(dst), len(l.Plain))
 		}
 	}
 	return nil
@@ -915,7 +887,7 @@ func cmdRekey(args []string) error {
 		if err != nil {
 			return err
 		}
-		blob, err := kh3.Wrap(l.plain, dstKey)
+		blob, err := kh3.Wrap(l.Plain, dstKey)
 		if err != nil {
 			return err
 		}
@@ -927,7 +899,7 @@ func cmdRekey(args []string) error {
 			return err
 		}
 		if *withAccount {
-			fmt.Printf("%s  %s -> %s  ->  %s\n", show(p), l.account, to, show(dst))
+			fmt.Printf("%s  %s -> %s  ->  %s\n", show(p), l.Account, to, show(dst))
 		} else {
 			fmt.Printf("%s  ->  %s\n", show(p), show(dst))
 		}
@@ -987,11 +959,11 @@ func cmdGrantAbilities(args []string) error {
 		if err != nil {
 			return err
 		}
-		if !kh3.IsSlot(l.plain) {
+		if !kh3.IsSlot(l.Plain) {
 			fmt.Printf("skip  %s  (system file)\n", show(p))
 			continue
 		}
-		buf := append([]byte(nil), l.plain...)
+		buf := append([]byte(nil), l.Plain...)
 		touched := false
 		fmt.Printf("\n%s\n", show(p))
 		for _, aid := range want {
@@ -1067,9 +1039,9 @@ func cmdDump(args []string) error {
 		// forum posts, so it is left out unless asked for; patch never reads it.
 		acct := ""
 		if *withAccount {
-			acct = l.account
+			acct = l.Account
 		}
-		data, err := kh3.Dump(l.plain, acct, *chars)
+		data, err := kh3.Dump(l.Plain, acct, *chars)
 		if err != nil {
 			return err
 		}
@@ -1110,7 +1082,7 @@ func cmdPatch(args []string) error {
 		if err != nil {
 			return err
 		}
-		newPlain, changes, err := kh3.Patch(l.plain, doc)
+		newPlain, changes, err := kh3.Patch(l.Plain, doc)
 		if err != nil {
 			return err
 		}
@@ -1153,7 +1125,7 @@ func cmdDiff(args []string) error {
 		if err != nil {
 			return nil, err
 		}
-		return l.plain, nil
+		return l.Plain, nil
 	}
 	a, err := asPlain(rest[0])
 	if err != nil {

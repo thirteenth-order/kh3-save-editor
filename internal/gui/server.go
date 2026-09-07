@@ -456,15 +456,6 @@ func (s *Server) addFolder(w http.ResponseWriter, raw string) {
 	writeJSON(w, http.StatusOK, folderResponse{Path: dir})
 }
 
-// openSave reads a save in whichever form it is stored in. A save with no
-// Steam wrapper needs no account id, so none of the account plumbing runs for
-// one and the endpoints below work on it exactly as they do on a PC save.
-type openedSave struct {
-	plain  []byte
-	key    []byte
-	format kh3.Format
-}
-
 // accountHint returns the account id of the discovered folder that holds p.
 // Usually the id is also a directory name on the way to the save and would be
 // found anyway, but a folder the user added by hand need not be laid out that
@@ -492,52 +483,15 @@ func accountHint(p string, dirs []kh3.SaveDir) string {
 	return ""
 }
 
-func openSave(p string, account string) (*openedSave, error) {
-	blob, err := kh3.ReadFile(p)
-	if err != nil {
-		return nil, err
-	}
-	var key []byte
-	format := kh3.DetectFormat(blob)
-	if format.NeedsKey() {
-		if _, key, err = kh3.ResolveAccount(p, blob, account); err != nil {
-			return nil, err
-		}
-	}
-	plain, _, err := kh3.Open(blob, key)
-	if err != nil {
-		return nil, err
-	}
-	return &openedSave{plain: plain, key: key, format: format}, nil
-}
-
-// writeSave seals, re-reads its own output the way the game would, backs up
-// the file it is about to replace and only then writes. Every write path in
-// this program does exactly this, and none of them may skip a step.
-func writeSave(p string, o *openedSave, newPlain []byte) (string, error) {
-	outBlob, err := kh3.Seal(newPlain, o.format, o.key)
-	if err != nil {
-		return "", err
-	}
-	check, _, err := kh3.Open(outBlob, o.key)
-	if err != nil {
-		return "", fmt.Errorf("self-check failed, nothing written: %w", err)
-	}
-	// Seal rewrites the CRC at 0x0C, so compare around it.
-	if string(check[:0x0C]) != string(newPlain[:0x0C]) ||
-		string(check[0x10:]) != string(newPlain[0x10:]) {
-		return "", fmt.Errorf("self-check failed, nothing written")
-	}
-	// For a save inside a zip this copies the whole archive, which is what a
-	// member replacement actually rewrites.
-	bak, err := kh3.BackupOf(p, time.Now())
-	if err != nil {
-		return "", fmt.Errorf("could not write a backup, so nothing was changed: %w", err)
-	}
-	if err := kh3.WriteFile(p, outBlob, 0o644); err != nil {
-		return "", err
-	}
-	return bak, nil
+// openSave reads and opens a save the way the CLI does, and o.Commit writes it
+// back the same way: one read path and one write path for the whole program,
+// so the interface cannot open or seal a save differently from the command
+// line. Commit seals, re-reads its own output as the game would, backs up the
+// file it is about to replace and only then writes. No handler may skip a
+// step, and there being nowhere else to go is what makes that true rather than
+// customary.
+func openSave(p string, account string) (*kh3.Save, error) {
+	return kh3.OpenFile(p, account)
 }
 
 func (s *Server) handleSwap(w http.ResponseWriter, r *http.Request) {
@@ -565,12 +519,12 @@ func (s *Server) handleSwap(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusInternalServerError, "%v", err)
 		return
 	}
-	if !kh3.IsSlot(o.plain) {
+	if !kh3.IsSlot(o.Plain) {
 		fail(w, http.StatusBadRequest, "that is the system file, it has no difficulty")
 		return
 	}
 
-	newPlain, changes, err := kh3.SwapDifficulty(o.plain, byte(req.Difficulty), kh3.SwapOptions{
+	newPlain, changes, err := kh3.SwapDifficulty(o.Plain, byte(req.Difficulty), kh3.SwapOptions{
 		ScaleHP:          !req.NoScaleHP,
 		GrantStartItems:  req.GrantItems,
 		RevokeStartItems: req.RevokeItem,
@@ -584,7 +538,7 @@ func (s *Server) handleSwap(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
-	bak, err := writeSave(req.Path, o, newPlain)
+	bak, err := o.Commit(newPlain, req.Path)
 	if err != nil {
 		fail(w, http.StatusInternalServerError, "%v", err)
 		return
@@ -610,7 +564,7 @@ func (s *Server) handleDetail(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusInternalServerError, "%v", err)
 		return
 	}
-	doc, err := kh3.Dump(o.plain, "", kh3.CharCount)
+	doc, err := kh3.Dump(o.Plain, "", kh3.CharCount)
 	if err != nil {
 		fail(w, http.StatusInternalServerError, "%v", err)
 		return
@@ -673,7 +627,7 @@ func (s *Server) handlePatch(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusInternalServerError, "%v", err)
 		return
 	}
-	newPlain, changes, err := kh3.Patch(o.plain, req.Doc)
+	newPlain, changes, err := kh3.Patch(o.Plain, req.Doc)
 	if err != nil {
 		fail(w, http.StatusBadRequest, "%v", err)
 		return
@@ -683,7 +637,7 @@ func (s *Server) handlePatch(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
-	bak, err := writeSave(req.Path, o, newPlain)
+	bak, err := o.Commit(newPlain, req.Path)
 	if err != nil {
 		fail(w, http.StatusInternalServerError, "%v", err)
 		return
