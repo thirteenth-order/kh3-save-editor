@@ -169,3 +169,25 @@ func TestPatchAcceptsTheBoundsTheSchemaDeclares(t *testing.T) {
 	}
 	t.Logf("%d bounds, all accepted", len(probes))
 }
+
+// A section that is not an object is an error, not a no-op.
+//
+// Patch used to reach for header, characters and inventory with a checked type
+// assertion and skip the section when it was anything else, so
+// {"header": "level 42 please"} reported no changes and wrote nothing while
+// looking like it had worked. The browser validator has always refused it, so
+// this is the same mirror the ranges above are: what one rejects, the other
+// rejects.
+func TestPatchRefusesASectionThatIsNotAnObject(t *testing.T) {
+	p := fixture.BuildFull(fixture.Default())
+	for _, sec := range kh3.Sections() {
+		for _, notObject := range []string{`"a string"`, `42`, `[1,2,3]`, `null`} {
+			doc := []byte(`{"` + sec.Key + `":` + notObject + `}`)
+			_, changes, err := kh3.Patch(p, doc)
+			if err == nil {
+				t.Errorf("Patch accepted %s = %s and reported %d changes, rather than "+
+					"saying it is not an object", sec.Key, notObject, len(changes))
+			}
+		}
+	}
+}

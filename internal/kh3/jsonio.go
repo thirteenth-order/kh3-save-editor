@@ -734,6 +734,252 @@ func refuseSlotOnlyKeys(d map[string]any, byName map[string]headerField) error {
 }
 
 // Patch applies a partial JSON document. Keys that are absent are left alone.
+// headerByName indexes headerFields by the name a document uses. It is built
+// once rather than per call: the fields are fixed at compile time.
+var headerByName = func() map[string]headerField {
+	m := make(map[string]headerField, len(headerFields))
+	for _, f := range headerFields {
+		m[f.name] = f
+	}
+	return m
+}()
+
+// patchHeader applies the header object. Four kinds of key can appear in it:
+// a mapped field, one of the NUL-terminated strings, one of the values Dump
+// derives from a number that is already here, and a typo.
+//
+// The derived ones are accepted and ignored, because rewriting them would
+// fight the field they came from and "dump, change one number, patch the whole
+// document back" has to work. A typo is an error: silently dropping a key
+// nobody recognizes is how a document quietly does nothing, and nobody finds
+// out until the save is loaded.
+func patchHeader(out []byte, hdr map[string]any) ([]string, error) {
+	var changes []string
+	for _, key := range sortedKeys(hdr) {
+		f, mapped := headerByName[key]
+		if !mapped {
+			if sf, isText := StringFieldByName(key); isText {
+				sv, isStr := hdr[key].(string)
+				if !isStr {
+					return nil, fmt.Errorf("header.%s must be a string", key)
+				}
+				old := GetString(out, sf)
+				if err := SetString(out, sf, sv); err != nil {
+					return nil, fmt.Errorf("header.%s: %w", key, err)
+				}
+				if old != sv {
+					changes = append(changes, fmt.Sprintf("header.%s: %q -> %q", key, old, sv))
+				}
+				continue
+			}
+			if derivedHeader[key] {
+				continue
+			}
+			return nil, fmt.Errorf("unknown key header.%s", key)
+		}
+		nv, err := asInt(hdr[key])
+		if err != nil {
+			return nil, fmt.Errorf("header.%s: %w", key, err)
+		}
+		// A read-only field is only an error when the document actually asks
+		// to move it. Rejecting one that still holds its dumped value would
+		// make the obvious workflow -- dump, change one number, patch the whole
+		// document back -- fail on a field nobody touched.
+		if ReadonlyHeader[key] {
+			if readField(out, f.off, f.kind) != nv {
+				return nil, fmt.Errorf("header.%s is read-only", key)
+			}
+			continue
+		}
+		if err := fits(f.kind, "header."+key, nv); err != nil {
+			return nil, err
+		}
+		old := readField(out, f.off, f.kind)
+		writeField(out, f.off, f.kind, nv)
+		if old != nv {
+			changes = append(changes, fmt.Sprintf("header.%s: %d -> %d", key, old, nv))
+		}
+	}
+	return changes, nil
+}
+
+// patchCharacters applies the per-character section: stats, the current weapon
+// slot, the ability array, the AI settings and the four equipment arrays.
+func patchCharacters(out []byte, chars map[string]any) ([]string, error) {
+	var changes []string
+	for _, cname := range sortedKeys(chars) {
+		ci := CharIndex(cname)
+		if ci < 0 {
+			return nil, fmt.Errorf("unknown character %q", cname)
+		}
+		entry, ok := chars[cname].(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("characters.%s must be an object", cname)
+		}
+		for _, key := range sortedKeys(entry) {
+			switch key {
+			case "abilities":
+				c, err := patchAbilities(out, ci, cname, entry[key])
+				if err != nil {
+					return nil, err
+				}
+				changes = append(changes, c...)
+				continue
+			case "current_weapon":
+				c, err := patchCurrentWeapon(out, ci, cname, entry[key])
+				if err != nil {
+					return nil, err
+				}
+				changes = append(changes, c...)
+				continue
+			case "ai":
+				c, err := patchAI(out, ci, cname, entry[key])
+				if err != nil {
+					return nil, err
+				}
+				changes = append(changes, c...)
+				continue
+			case "equipment":
+				c, err := patchEquipment(out, ci, cname, entry[key])
+				if err != nil {
+					return nil, err
+				}
+				changes = append(changes, c...)
+				continue
+			}
+			st, ok := findStat(key)
+			if !ok {
+				return nil, fmt.Errorf("unknown key characters.%s.%s", cname, key)
+			}
+			nv, err := asInt(entry[key])
+			if err != nil {
+				return nil, fmt.Errorf("characters.%s.%s: %w", cname, key, err)
+			}
+			if err := fits(st.kind, fmt.Sprintf("characters.%s.%s", cname, key), nv); err != nil {
+				return nil, err
+			}
+			off := charOffset(ci) + st.off
+			old := readField(out, off, st.kind)
+			writeField(out, off, st.kind, nv)
+			if old != nv {
+				changes = append(changes, fmt.Sprintf("%s.%s: %d -> %d", cname, key, old, nv))
+			}
+		}
+	}
+	return changes, nil
+}
+
+// patchAbilities writes the 512-entry ability array of one character. The keys
+// are ability ids, which a dump writes in hex, so they are parsed with a base
+// of zero rather than assumed decimal.
+func patchAbilities(out []byte, ci int, cname string, raw any) ([]string, error) {
+	abil, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("characters.%s.abilities must be an object", cname)
+	}
+	var changes []string
+	for _, aidS := range sortedKeys(abil) {
+		aid64, err := strconv.ParseInt(aidS, 0, 32)
+		if err != nil {
+			return nil, fmt.Errorf("bad ability id %q", aidS)
+		}
+		word, err := abilityWord(abil[aidS])
+		if err != nil {
+			return nil, fmt.Errorf("ability %s: %w", aidS, err)
+		}
+		aid := int(aid64)
+		old := GetAbility(out, ci, aid)
+		SetAbility(out, ci, aid, word)
+		if old != word {
+			changes = append(changes, fmt.Sprintf(
+				"%s.ability 0x%03X %s: 0x%08X -> 0x%08X",
+				cname, aid, AbilityName(aid), old, word))
+		}
+	}
+	return changes, nil
+}
+
+func patchCurrentWeapon(out []byte, ci int, cname string, raw any) ([]string, error) {
+	nv, err := asInt(raw)
+	if err != nil {
+		return nil, fmt.Errorf("characters.%s.current_weapon: %w", cname, err)
+	}
+	if nv < 0 || nv >= WeaponSlots {
+		return nil, fmt.Errorf("characters.%s.current_weapon: slot %d is outside 0-%d",
+			cname, nv, WeaponSlots-1)
+	}
+	old := GetCurrentWeapon(out, ci)
+	if old == int(nv) {
+		return nil, nil
+	}
+	SetCurrentWeapon(out, ci, int(nv))
+	return []string{fmt.Sprintf("%s.current_weapon: %d -> %d", cname, old, nv)}, nil
+}
+
+// patchInventory applies the 0x400-entry item array. An entry may be the whole
+// dumped object or the bare count, and a count of zero clears the flags too,
+// which is how an item is removed rather than left at zero held.
+func patchInventory(out []byte, inv map[string]any) ([]string, error) {
+	var changes []string
+	for _, idS := range sortedKeys(inv) {
+		id64, err := strconv.ParseInt(idS, 0, 32)
+		if err != nil {
+			return nil, fmt.Errorf("bad item id %q", idS)
+		}
+		id := int(id64)
+		if id < 0 || id >= InventoryCount {
+			return nil, fmt.Errorf("item id %d out of range", id)
+		}
+		count, flags := int64(0), int64(ItemFresh)
+		switch t := inv[idS].(type) {
+		case map[string]any:
+			if c, ok := t["count"]; ok {
+				if count, err = asInt(c); err != nil {
+					return nil, err
+				}
+			}
+			if fv, ok := t["flags"]; ok {
+				if flags, err = asInt(fv); err != nil {
+					return nil, err
+				}
+			}
+		default:
+			if count, err = asInt(inv[idS]); err != nil {
+				return nil, err
+			}
+		}
+		where := fmt.Sprintf("inventory.%d", id)
+		if err := fits("u8", where+".count", count); err != nil {
+			return nil, err
+		}
+		if err := fits("u8", where+".flags", flags); err != nil {
+			return nil, err
+		}
+		oldC, oldF := GetItem(out, id)
+		if count == 0 {
+			flags = 0
+		}
+		SetItem(out, id, int(count), byte(flags))
+		newC, newF := GetItem(out, id)
+		// Report what the save holds, not what the document asked for. These
+		// two used to disagree: the comparison read the stored value and the
+		// message printed the requested one, so a clamped count was announced
+		// as though it had been written. materials and keychain_upgrades have
+		// always reported the stored value.
+		if oldC != newC || oldF != newF {
+			changes = append(changes, fmt.Sprintf("inventory %d %s: x%d -> x%d",
+				id, ItemName(id), oldC, newC))
+		}
+	}
+	return changes, nil
+}
+
+// Patch applies a JSON document to a save and reports what it changed.
+//
+// The order below is the order of the changes it reports, and it is fixed so
+// that a document touching several regions reads the same way every time. The
+// header goes first because the munny ledger and the two mirrored fields are
+// reconciled against what they held before any of it was written.
 func Patch(plain, doc []byte) ([]byte, []string, error) {
 	var d map[string]any
 	if err := json.Unmarshal(doc, &d); err != nil {
@@ -744,237 +990,54 @@ func Patch(plain, doc []byte) ([]byte, []string, error) {
 	}
 	out := make([]byte, len(plain))
 	copy(out, plain)
-	var changes []string
 
-	byName := map[string]headerField{}
-	for _, f := range headerFields {
-		byName[f.name] = f
-	}
+	slot := IsSlot(out)
 	var ledgerBefore [3]int64
 	var mirrorsBefore [][2]int64
-	if IsSlot(out) {
+	if slot {
 		ledgerBefore = readMunnyLedger(out)
 		mirrorsBefore = readMirrors(out)
-	} else if err := refuseSlotOnlyKeys(d, byName); err != nil {
+	} else if err := refuseSlotOnlyKeys(d, headerByName); err != nil {
+		// Dump stops at the difficulty byte for the small system file, and
+		// Patch has to draw the same line: bonus_hp is at 0xB49C and a system
+		// file ends around 0x7B20, so writing one would index past the buffer.
 		return nil, nil, err
 	}
 
-	if hdr, ok := d["header"].(map[string]any); ok {
-		for _, key := range sortedKeys(hdr) {
-			f, ok := byName[key]
-			if !ok {
-				// The three other things a header key can be: one of the
-				// NUL-terminated fields, one of the values Dump derives from a
-				// number that is already here, or a typo. The first is written,
-				// the second is skipped because rewriting it would fight the
-				// field it came from, and the third is now an error -- silently
-				// dropping an unrecognized key is how a document quietly does
-				// nothing and nobody finds out until the save is loaded.
-				if sf, isText := StringFieldByName(key); isText {
-					sv, isStr := hdr[key].(string)
-					if !isStr {
-						return nil, nil, fmt.Errorf("header.%s must be a string", key)
-					}
-					old := GetString(out, sf)
-					if err := SetString(out, sf, sv); err != nil {
-						return nil, nil, fmt.Errorf("header.%s: %w", key, err)
-					}
-					if old != sv {
-						changes = append(changes, fmt.Sprintf("header.%s: %q -> %q", key, old, sv))
-					}
-					continue
-				}
-				if derivedHeader[key] {
-					continue
-				}
-				return nil, nil, fmt.Errorf("unknown key header.%s", key)
-			}
-			nv, err := asInt(hdr[key])
-			if err != nil {
-				return nil, nil, fmt.Errorf("header.%s: %w", key, err)
-			}
-			// A read-only field is only an error when the document actually
-			// asks to move it. Rejecting one that still holds its dumped value
-			// would make the obvious workflow -- dump, change one number, patch
-			// the whole document back -- fail on a field nobody touched.
-			if ReadonlyHeader[key] {
-				if readField(out, f.off, f.kind) != nv {
-					return nil, nil, fmt.Errorf("header.%s is read-only", key)
-				}
-				continue
-			}
-			if err := fits(f.kind, "header."+key, nv); err != nil {
-				return nil, nil, err
-			}
-			old := readField(out, f.off, f.kind)
-			writeField(out, f.off, f.kind, nv)
-			if old != nv {
-				changes = append(changes, fmt.Sprintf("header.%s: %d -> %d", key, old, nv))
-			}
-		}
-		if IsSlot(out) {
-			if err := reconcileMunny(out, ledgerBefore, &changes); err != nil {
-				return nil, nil, err
-			}
-			reconcileMirrors(out, mirrorsBefore, &changes)
-		}
-	}
-
-	if chars, ok := d["characters"].(map[string]any); ok {
-		for _, cname := range sortedKeys(chars) {
-			ci := CharIndex(cname)
-			if ci < 0 {
-				return nil, nil, fmt.Errorf("unknown character %q", cname)
-			}
-			entry, ok := chars[cname].(map[string]any)
-			if !ok {
-				return nil, nil, fmt.Errorf("characters.%s must be an object", cname)
-			}
-			for _, key := range sortedKeys(entry) {
-				if key == "abilities" {
-					abil, ok := entry[key].(map[string]any)
-					if !ok {
-						return nil, nil, fmt.Errorf("characters.%s.abilities must be an object", cname)
-					}
-					for _, aidS := range sortedKeys(abil) {
-						aid64, err := strconv.ParseInt(aidS, 0, 32)
-						if err != nil {
-							return nil, nil, fmt.Errorf("bad ability id %q", aidS)
-						}
-						word, err := abilityWord(abil[aidS])
-						if err != nil {
-							return nil, nil, fmt.Errorf("ability %s: %w", aidS, err)
-						}
-						aid := int(aid64)
-						old := GetAbility(out, ci, aid)
-						SetAbility(out, ci, aid, word)
-						if old != word {
-							changes = append(changes, fmt.Sprintf(
-								"%s.ability 0x%03X %s: 0x%08X -> 0x%08X",
-								cname, aid, AbilityName(aid), old, word))
-						}
-					}
-					continue
-				}
-				switch key {
-				case "current_weapon":
-					nv, err := asInt(entry[key])
-					if err != nil {
-						return nil, nil, fmt.Errorf("characters.%s.current_weapon: %w", cname, err)
-					}
-					if nv < 0 || nv >= WeaponSlots {
-						return nil, nil, fmt.Errorf(
-							"characters.%s.current_weapon: slot %d is outside 0-%d",
-							cname, nv, WeaponSlots-1)
-					}
-					if old := GetCurrentWeapon(out, ci); old != int(nv) {
-						SetCurrentWeapon(out, ci, int(nv))
-						changes = append(changes, fmt.Sprintf(
-							"%s.current_weapon: %d -> %d", cname, old, nv))
-					}
-					continue
-				case "ai":
-					c, err := patchAI(out, ci, cname, entry[key])
-					if err != nil {
-						return nil, nil, err
-					}
-					changes = append(changes, c...)
-					continue
-				case "equipment":
-					c, err := patchEquipment(out, ci, cname, entry[key])
-					if err != nil {
-						return nil, nil, err
-					}
-					changes = append(changes, c...)
-					continue
-				}
-				st, ok := findStat(key)
-				if !ok {
-					return nil, nil, fmt.Errorf("unknown key characters.%s.%s", cname, key)
-				}
-				nv, err := asInt(entry[key])
-				if err != nil {
-					return nil, nil, fmt.Errorf("characters.%s.%s: %w", cname, key, err)
-				}
-				if err := fits(st.kind, fmt.Sprintf("characters.%s.%s", cname, key), nv); err != nil {
-					return nil, nil, err
-				}
-				off := charOffset(ci) + st.off
-				old := readField(out, off, st.kind)
-				writeField(out, off, st.kind, nv)
-				if old != nv {
-					changes = append(changes, fmt.Sprintf("%s.%s: %d -> %d", cname, key, old, nv))
-				}
-			}
-		}
-	}
-
-	if inv, ok := d["inventory"].(map[string]any); ok {
-		for _, idS := range sortedKeys(inv) {
-			id64, err := strconv.ParseInt(idS, 0, 32)
-			if err != nil {
-				return nil, nil, fmt.Errorf("bad item id %q", idS)
-			}
-			id := int(id64)
-			if id < 0 || id >= InventoryCount {
-				return nil, nil, fmt.Errorf("item id %d out of range", id)
-			}
-			count, flags := int64(0), int64(ItemFresh)
-			switch t := inv[idS].(type) {
-			case map[string]any:
-				if c, ok := t["count"]; ok {
-					if count, err = asInt(c); err != nil {
-						return nil, nil, err
-					}
-				}
-				if fv, ok := t["flags"]; ok {
-					if flags, err = asInt(fv); err != nil {
-						return nil, nil, err
-					}
-				}
-			default:
-				if count, err = asInt(inv[idS]); err != nil {
-					return nil, nil, err
-				}
-			}
-			where := fmt.Sprintf("inventory.%d", id)
-			if err := fits("u8", where+".count", count); err != nil {
-				return nil, nil, err
-			}
-			if err := fits("u8", where+".flags", flags); err != nil {
-				return nil, nil, err
-			}
-			oldC, oldF := GetItem(out, id)
-			if count == 0 {
-				flags = 0
-			}
-			SetItem(out, id, int(count), byte(flags))
-			newC, newF := GetItem(out, id)
-			// Report what the save holds, not what the document asked for.
-			// These two used to disagree: the comparison read the stored value
-			// and the message printed the requested one, so a clamped count
-			// was announced as though it had been written. materials and
-			// keychain_upgrades below have always reported the stored value.
-			if oldC != newC || oldF != newF {
-				changes = append(changes, fmt.Sprintf("inventory %d %s: x%d -> x%d",
-					id, ItemName(id), oldC, newC))
-			}
-		}
-	}
-	for _, sec := range patchSections {
-		raw, ok := d[sec.key]
+	var changes []string
+	apply := func(key string, fn func([]byte, map[string]any) ([]string, error)) error {
+		raw, ok := d[key]
 		if !ok {
-			continue
+			return nil
 		}
 		m, ok := raw.(map[string]any)
 		if !ok {
-			return nil, nil, fmt.Errorf("%s must be an object", sec.key)
+			return fmt.Errorf("%s must be an object", key)
 		}
-		c, err := sec.apply(out, m)
-		if err != nil {
+		c, err := fn(out, m)
+		changes = append(changes, c...)
+		return err
+	}
+
+	if err := apply("header", patchHeader); err != nil {
+		return nil, nil, err
+	}
+	if _, hasHeader := d["header"]; hasHeader && slot {
+		if err := reconcileMunny(out, ledgerBefore, &changes); err != nil {
 			return nil, nil, err
 		}
-		changes = append(changes, c...)
+		reconcileMirrors(out, mirrorsBefore, &changes)
+	}
+	if err := apply("characters", patchCharacters); err != nil {
+		return nil, nil, err
+	}
+	if err := apply("inventory", patchInventory); err != nil {
+		return nil, nil, err
+	}
+	for _, sec := range patchSections {
+		if err := apply(sec.key, sec.apply); err != nil {
+			return nil, nil, err
+		}
 	}
 	return out, changes, nil
 }
