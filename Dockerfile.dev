@@ -29,8 +29,8 @@ ARG GO_VERSION=1.26
 FROM golang:${GO_VERSION}-trixie
 
 # make and git come with the image; python3 does not. The last Python left in
-# the project is tools/gen_tables.py, which `make ci` runs via tables-check --
-# stdlib only, so there is nothing to install alongside it.
+# the project is tools/gen_tables.py, which `make ci` runs via tables-check.
+# It is stdlib only, so there is nothing to install alongside it.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 \
  && rm -rf /var/lib/apt/lists/*
