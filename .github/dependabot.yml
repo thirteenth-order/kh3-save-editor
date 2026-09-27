@@ -16,3 +16,8 @@ updates:
     directory: /tools/jscheck
     schedule:
       interval: monthly
+    # 7.x ships as ~20 per-platform binary packages, which ends the "one
+    # devDependency with none of its own" property the jscheck README relies on.
+    ignore:
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
