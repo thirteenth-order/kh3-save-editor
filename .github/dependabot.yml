@@ -1,0 +1,18 @@
+# The actions are pinned by commit SHA and typescript is pinned exactly, so
+# nothing moves unless something proposes it. Go has no module dependencies;
+# the toolchain version in go.mod, the workflows and both Dockerfiles is bumped
+# by hand, which Dependabot cannot do through the GO_VERSION build arg.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /tools/jscheck
+    schedule:
+      interval: monthly
