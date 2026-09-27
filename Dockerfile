@@ -11,7 +11,7 @@
 # The build downloads nothing: this project has no third-party dependencies,
 # so `docker build --network none` works once the builder image is pulled.
 
-ARG GO_VERSION=1.24
+ARG GO_VERSION=1.26
 
 FROM golang:${GO_VERSION}-alpine AS build
 

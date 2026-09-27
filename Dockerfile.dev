@@ -25,7 +25,7 @@
 # the race detector needs cgo, and cgo needs a C toolchain. The golang Debian
 # images already have one; the Alpine variant does not, and `make ci` fails at
 # test-race with "-race requires cgo".
-ARG GO_VERSION=1.24
+ARG GO_VERSION=1.26
 FROM golang:${GO_VERSION}-trixie
 
 # make and git come with the image; python3 does not. The last Python left in
