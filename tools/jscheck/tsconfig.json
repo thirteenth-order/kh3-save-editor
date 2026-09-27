@@ -2,8 +2,8 @@
   "//": [
     "Type-checks the page's own JavaScript without changing a byte of it.",
     "",
-    "allowJs + checkJs is the whole point: the assets stay plain classic",
-    "scripts that the browser loads directly, and this reads them where they",
+    "allowJs + checkJs is the whole point: the assets stay plain ES",
+    "modules that the browser loads directly, and this reads them where they",
     "sit. There is no emit, no bundle and no output directory, so nothing",
     "here can end up in the binary.",
     "",

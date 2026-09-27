@@ -37,7 +37,7 @@ npm ci && npx tsc -p tsconfig.json   # from here
 
 `typescript` is the only dependency, it is pinned exactly, and it has none of
 its own. Nothing installed here is served, bundled or shipped: the page is
-still classic scripts with no build step, and the binary embeds the assets
+still plain ES modules with no build step, and the binary embeds the assets
 exactly as written. `noEmit` is set, so there is no output to leak into one.
 
 ## Why both skip without node

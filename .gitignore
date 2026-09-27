@@ -43,7 +43,7 @@ KHIII_*.bin
 # ---------------------------------------------------------------------------
 # Node (only tools/jscheck, and it is dev-only)
 #
-# The page ships as classic scripts with no build step: the binary embeds the
+# The page ships as plain ES modules with no build step: the binary embeds the
 # assets exactly as written. Nothing installed here is served, bundled or
 # distributed. The manifests above are un-ignored by name so `npm ci` can pin
 # the one devDependency; the tree it installs is regenerable and never goes in.

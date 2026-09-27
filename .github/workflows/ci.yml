@@ -92,8 +92,8 @@ jobs:
     # contributor's machine and wrong here, so node is pinned rather than left
     # to whatever the runner image happens to ship.
     #
-    # Nothing installed here is served or shipped. The UI is still classic
-    # scripts with no build step and the binary embeds the assets as written.
+    # Nothing installed here is served or shipped. The UI is still plain ES
+    # modules with no build step and the binary embeds the assets as written.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

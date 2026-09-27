@@ -171,7 +171,7 @@ test-race: ## go test under the race detector
 # the real schema and a dump of the fixture. This is the other half of the
 # safety net: a type checker that reads the same files where they sit and finds
 # the undefined name and the misspelled property without needing a DOM to run
-# them in. It emits nothing: the page stays classic scripts with no build
+# them in. It emits nothing: the page stays plain ES modules with no build
 # step, and the binary embeds the assets exactly as written.
 #
 # Both skip when node is not installed, so a machine without it can still run
